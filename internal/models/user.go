@@ -3,7 +3,7 @@ package models
 import "time"
 
 type User struct {
-	ID        int64     `gorm:"primaryKey" json:"id"`
+	ID        int64     `gorm:"primaryKey" json:"-"`
 	UUID      string    `gorm:"type:uuid;default:gen_random_uuid()" json:"uuid"`
 	Email     string    `gorm:"uniqueIndex" json:"email"`
 	Password  string    `json:"-"`

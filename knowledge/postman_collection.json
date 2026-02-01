@@ -1,0 +1,671 @@
+{
+  "info": {
+    "name": "Finance Tracker API",
+    "description": "API collection for Finance Tracker Backend - A personal finance management system",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "assetUuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "expenseUuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incomeUuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "savingGoalUuid",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Check if the server and database are healthy"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.Token) {",
+                  "        pm.collectionVariables.set('authToken', jsonData.data.Token);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securepassword123\",\n  \"name\": \"John Doe\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Register a new user account"
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.Token) {",
+                  "        pm.collectionVariables.set('authToken', jsonData.data.Token);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securepassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login with existing credentials"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Assets",
+      "item": [
+        {
+          "name": "Create Asset",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.uuid) {",
+                  "        pm.collectionVariables.set('assetUuid', jsonData.data.uuid);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bitcoin\",\n  \"type\": \"CRYPTO\",\n  \"quantity\": 0.5,\n  \"symbol\": \"BTC\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/assets",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets"]
+            },
+            "description": "Create a new asset. Valid types: CRYPTO, STOCK, OTHER"
+          },
+          "response": []
+        },
+        {
+          "name": "List Assets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/assets",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets"]
+            },
+            "description": "List all assets for the authenticated user"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Asset",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/assets/{{assetUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets", "{{assetUuid}}"]
+            },
+            "description": "Get a specific asset by UUID"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Asset",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 0.75\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/assets/{{assetUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets", "{{assetUuid}}"]
+            },
+            "description": "Update a specific asset"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Asset",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/assets/{{assetUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets", "{{assetUuid}}"]
+            },
+            "description": "Delete a specific asset"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Expenses",
+      "item": [
+        {
+          "name": "Create Expense",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.uuid) {",
+                  "        pm.collectionVariables.set('expenseUuid', jsonData.data.uuid);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 50000,\n  \"category\": \"FOOD\",\n  \"note\": \"Lunch with team\",\n  \"date\": \"2026-01-31T12:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/expenses",
+              "host": ["{{baseUrl}}"],
+              "path": ["expenses"]
+            },
+            "description": "Create a new expense. Valid categories: FOOD, TRANSPORT, HOUSING, UTILITIES, HEALTH, ENTERTAINMENT, SHOPPING, OTHER"
+          },
+          "response": []
+        },
+        {
+          "name": "List Expenses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/expenses",
+              "host": ["{{baseUrl}}"],
+              "path": ["expenses"]
+            },
+            "description": "List all expenses for the authenticated user"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Expense",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/expenses/{{expenseUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["expenses", "{{expenseUuid}}"]
+            },
+            "description": "Get a specific expense by UUID"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Expense",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 75000,\n  \"category\": \"ENTERTAINMENT\",\n  \"note\": \"Updated expense note\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/expenses/{{expenseUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["expenses", "{{expenseUuid}}"]
+            },
+            "description": "Update a specific expense. All fields are optional."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Expense",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/expenses/{{expenseUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["expenses", "{{expenseUuid}}"]
+            },
+            "description": "Delete a specific expense"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Incomes",
+      "item": [
+        {
+          "name": "Create Income",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.uuid) {",
+                  "        pm.collectionVariables.set('incomeUuid', jsonData.data.uuid);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 5000000,\n  \"source\": \"Monthly Salary\",\n  \"note\": \"January 2026 salary\",\n  \"date\": \"2026-01-31T12:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/incomes",
+              "host": ["{{baseUrl}}"],
+              "path": ["incomes"]
+            },
+            "description": "Create a new income record"
+          },
+          "response": []
+        },
+        {
+          "name": "List Incomes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/incomes",
+              "host": ["{{baseUrl}}"],
+              "path": ["incomes"]
+            },
+            "description": "List all incomes for the authenticated user"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Income",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/incomes/{{incomeUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["incomes", "{{incomeUuid}}"]
+            },
+            "description": "Get a specific income by UUID"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Income",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 5500000,\n  \"source\": \"Monthly Salary + Bonus\",\n  \"note\": \"Updated income note\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/incomes/{{incomeUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["incomes", "{{incomeUuid}}"]
+            },
+            "description": "Update a specific income. All fields are optional."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Income",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/incomes/{{incomeUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["incomes", "{{incomeUuid}}"]
+            },
+            "description": "Delete a specific income"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Saving Goals",
+      "item": [
+        {
+          "name": "Create Saving Goal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.uuid) {",
+                  "        pm.collectionVariables.set('savingGoalUuid', jsonData.data.uuid);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Emergency Fund\",\n  \"targetAmount\": 50000000,\n  \"currentAmount\": 10000000,\n  \"deadline\": \"2026-12-31T23:59:59Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/saving-goals",
+              "host": ["{{baseUrl}}"],
+              "path": ["saving-goals"]
+            },
+            "description": "Create a new saving goal. Deadline is optional."
+          },
+          "response": []
+        },
+        {
+          "name": "List Saving Goals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/saving-goals",
+              "host": ["{{baseUrl}}"],
+              "path": ["saving-goals"]
+            },
+            "description": "List all saving goals for the authenticated user"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Saving Goal",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/saving-goals/{{savingGoalUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["saving-goals", "{{savingGoalUuid}}"]
+            },
+            "description": "Get a specific saving goal by UUID"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Saving Goal",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Goal Name\",\n  \"targetAmount\": 75000000,\n  \"currentAmount\": 25000000,\n  \"deadline\": \"2027-06-30T23:59:59Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/saving-goals/{{savingGoalUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["saving-goals", "{{savingGoalUuid}}"]
+            },
+            "description": "Update a specific saving goal. All fields are optional."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Saving Goal",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/saving-goals/{{savingGoalUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["saving-goals", "{{savingGoalUuid}}"]
+            },
+            "description": "Delete a specific saving goal"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

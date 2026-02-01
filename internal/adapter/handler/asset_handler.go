@@ -3,7 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
+	"strings"
 
 	"monity/internal/adapter/middleware"
 	"monity/internal/core/port"
@@ -68,14 +68,13 @@ func (h *AssetHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := r.PathValue("id") // Go 1.22+ routing
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid asset id", nil)
+	uuid := r.PathValue("uuid")
+	if strings.TrimSpace(uuid) == "" {
+		response.Error(w, http.StatusBadRequest, "invalid asset uuid", nil)
 		return
 	}
 
-	asset, err := h.svc.GetAsset(r.Context(), userID, id)
+	asset, err := h.svc.GetAsset(r.Context(), userID, uuid)
 	if err != nil {
 		if err.Error() == "asset not found" {
 			response.Error(w, http.StatusNotFound, "asset not found", nil)
@@ -95,10 +94,9 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := r.PathValue("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid asset id", nil)
+	uuid := r.PathValue("uuid")
+	if strings.TrimSpace(uuid) == "" {
+		response.Error(w, http.StatusBadRequest, "invalid asset uuid", nil)
 		return
 	}
 
@@ -108,7 +106,7 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	asset, err := h.svc.UpdateAsset(r.Context(), userID, id, req)
+	asset, err := h.svc.UpdateAsset(r.Context(), userID, uuid, req)
 	if err != nil {
 		if err.Error() == "asset not found" {
 			response.Error(w, http.StatusNotFound, "asset not found", nil)
@@ -128,15 +126,14 @@ func (h *AssetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := r.PathValue("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid asset id", nil)
+	uuid := r.PathValue("uuid")
+	if strings.TrimSpace(uuid) == "" {
+		response.Error(w, http.StatusBadRequest, "invalid asset uuid", nil)
 		return
 	}
 
-	if err := h.svc.DeleteAsset(r.Context(), userID, id); err != nil {
-		if err.Error() == "asset not found or not owned by user" {
+	if err := h.svc.DeleteAsset(r.Context(), userID, uuid); err != nil {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not owned") {
 			response.Error(w, http.StatusNotFound, "asset not found", nil)
 			return
 		}

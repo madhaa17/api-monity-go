@@ -27,9 +27,9 @@ func (r *AssetRepo) Create(ctx context.Context, asset *models.Asset) error {
 	return nil
 }
 
-func (r *AssetRepo) GetByID(ctx context.Context, id int64, userID int64) (*models.Asset, error) {
+func (r *AssetRepo) GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Asset, error) {
 	var asset models.Asset
-	result := r.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&asset)
+	result := r.db.WithContext(ctx).Where("uuid = ? AND user_id = ?", uuid, userID).First(&asset)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -61,8 +61,8 @@ func (r *AssetRepo) Update(ctx context.Context, asset *models.Asset) error {
 	return nil
 }
 
-func (r *AssetRepo) Delete(ctx context.Context, id int64, userID int64) error {
-	result := r.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).Delete(&models.Asset{})
+func (r *AssetRepo) Delete(ctx context.Context, uuid string, userID int64) error {
+	result := r.db.WithContext(ctx).Where("uuid = ? AND user_id = ?", uuid, userID).Delete(&models.Asset{})
 	if result.Error != nil {
 		return fmt.Errorf("delete asset: %w", result.Error)
 	}

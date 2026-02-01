@@ -34,8 +34,8 @@ func (s *AssetService) CreateAsset(ctx context.Context, userID int64, req port.C
 	return asset, nil
 }
 
-func (s *AssetService) GetAsset(ctx context.Context, userID int64, assetID int64) (*models.Asset, error) {
-	asset, err := s.repo.GetByID(ctx, assetID, userID)
+func (s *AssetService) GetAsset(ctx context.Context, userID int64, uuid string) (*models.Asset, error) {
+	asset, err := s.repo.GetByUUID(ctx, uuid, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get asset: %w", err)
 	}
@@ -56,8 +56,8 @@ func (s *AssetService) ListAssets(ctx context.Context, userID int64) ([]models.A
 	return assets, nil
 }
 
-func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, assetID int64, req port.UpdateAssetRequest) (*models.Asset, error) {
-	asset, err := s.GetAsset(ctx, userID, assetID)
+func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid string, req port.UpdateAssetRequest) (*models.Asset, error) {
+	asset, err := s.GetAsset(ctx, userID, uuid)
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +81,8 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, assetID in
 	return asset, nil
 }
 
-func (s *AssetService) DeleteAsset(ctx context.Context, userID int64, assetID int64) error {
-	if err := s.repo.Delete(ctx, assetID, userID); err != nil {
+func (s *AssetService) DeleteAsset(ctx context.Context, userID int64, uuid string) error {
+	if err := s.repo.Delete(ctx, uuid, userID); err != nil {
 		return fmt.Errorf("delete asset: %w", err)
 	}
 	return nil

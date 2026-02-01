@@ -7,9 +7,9 @@ import (
 )
 
 type Asset struct {
-	ID        int64           `gorm:"primaryKey" json:"id"`
+	ID        int64           `gorm:"primaryKey" json:"-"`
 	UUID      string          `gorm:"type:uuid;default:gen_random_uuid()" json:"uuid"`
-	UserID    int64           `gorm:"index" json:"userId"`
+	UserID    int64           `gorm:"index" json:"-"`
 	Name      string          `json:"name"`
 	Type      AssetType       `gorm:"type:asset_type" json:"type"`
 	Quantity  decimal.Decimal `gorm:"type:decimal(20,8)" json:"quantity"`
@@ -19,10 +19,10 @@ type Asset struct {
 }
 
 type AssetPriceHistory struct {
-	ID         int64          `db:"id" json:"id"`
-	UUID       string         `db:"uuid" json:"uuid"`
-	AssetID    int64          `db:"asset_id" json:"assetId"`
-	Price      decimal.Decimal `db:"price" json:"price"`
-	Source     string         `db:"source" json:"source"`
-	RecordedAt time.Time     `db:"recorded_at" json:"recordedAt"`
+	ID         int64           `gorm:"primaryKey" json:"-"`
+	UUID       string          `gorm:"type:uuid;default:gen_random_uuid()" json:"uuid"`
+	AssetID    int64           `gorm:"index" json:"-"`
+	Price      decimal.Decimal `gorm:"type:decimal(20,8)" json:"price"`
+	Source     string          `json:"source"`
+	RecordedAt time.Time       `json:"recordedAt"`
 }

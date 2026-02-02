@@ -18,6 +18,7 @@ type Handlers struct {
 	Price             *handler.PriceHandler
 	AssetPriceHistory *handler.AssetPriceHistoryHandler
 	Insight           *handler.InsightHandler
+	Portfolio         *handler.PortfolioHandler
 }
 
 type Router struct {
@@ -42,6 +43,7 @@ func (r *Router) Setup() *http.ServeMux {
 	r.registerSavingGoalRoutes()
 	r.registerPriceRoutes()
 	r.registerInsightRoutes()
+	r.registerPortfolioRoutes()
 	return r.mux
 }
 

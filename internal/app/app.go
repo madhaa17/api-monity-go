@@ -15,15 +15,18 @@ import (
 )
 
 type App struct {
-	cfg                *config.Config
-	db                 *gorm.DB
-	srv                *http.Server
-	authHandler        *handler.AuthHandler
-	assetHandler       *handler.AssetHandler
-	expenseHandler     *handler.ExpenseHandler
-	incomeHandler      *handler.IncomeHandler
-	savingGoalHandler  *handler.SavingGoalHandler
-	authMiddleware     *middleware.AuthMiddleware
+	cfg                      *config.Config
+	db                       *gorm.DB
+	srv                      *http.Server
+	authHandler              *handler.AuthHandler
+	assetHandler             *handler.AssetHandler
+	expenseHandler           *handler.ExpenseHandler
+	incomeHandler            *handler.IncomeHandler
+	savingGoalHandler        *handler.SavingGoalHandler
+	priceHandler             *handler.PriceHandler
+	assetPriceHistoryHandler *handler.AssetPriceHistoryHandler
+	insightHandler           *handler.InsightHandler
+	authMiddleware           *middleware.AuthMiddleware
 }
 
 func New(ctx context.Context, cfg *config.Config, db *gorm.DB) *App {
@@ -33,6 +36,8 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB) *App {
 	expenseRepo := repository.NewExpenseRepository(db)
 	incomeRepo := repository.NewIncomeRepository(db)
 	savingGoalRepo := repository.NewSavingGoalRepository(db)
+	assetPriceHistoryRepo := repository.NewAssetPriceHistoryRepository(db)
+	insightRepo := repository.NewInsightRepository(db)
 
 	// Services
 	authService := service.NewAuthService(userRepo, cfg)
@@ -40,6 +45,9 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB) *App {
 	expenseService := service.NewExpenseService(expenseRepo)
 	incomeService := service.NewIncomeService(incomeRepo)
 	savingGoalService := service.NewSavingGoalService(savingGoalRepo)
+	priceService := service.NewPriceService(&cfg.PriceAPI)
+	assetPriceHistoryService := service.NewAssetPriceHistoryService(assetPriceHistoryRepo, assetRepo, priceService)
+	insightService := service.NewInsightService(insightRepo)
 
 	// Handlers & Middleware
 	authHandler := handler.NewAuthHandler(authService)
@@ -47,17 +55,23 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB) *App {
 	expenseHandler := handler.NewExpenseHandler(expenseService)
 	incomeHandler := handler.NewIncomeHandler(incomeService)
 	savingGoalHandler := handler.NewSavingGoalHandler(savingGoalService)
+	priceHandler := handler.NewPriceHandler(priceService)
+	assetPriceHistoryHandler := handler.NewAssetPriceHistoryHandler(assetPriceHistoryService)
+	insightHandler := handler.NewInsightHandler(insightService)
 	authMiddleware := middleware.NewAuthMiddleware(cfg)
 
 	app := &App{
-		cfg:               cfg,
-		db:                db,
-		authHandler:       authHandler,
-		assetHandler:      assetHandler,
-		expenseHandler:    expenseHandler,
-		incomeHandler:     incomeHandler,
-		savingGoalHandler: savingGoalHandler,
-		authMiddleware:    authMiddleware,
+		cfg:                      cfg,
+		db:                       db,
+		authHandler:              authHandler,
+		assetHandler:             assetHandler,
+		expenseHandler:           expenseHandler,
+		incomeHandler:            incomeHandler,
+		savingGoalHandler:        savingGoalHandler,
+		priceHandler:             priceHandler,
+		assetPriceHistoryHandler: assetPriceHistoryHandler,
+		insightHandler:           insightHandler,
+		authMiddleware:           authMiddleware,
 	}
 	app.srv = &http.Server{
 		Addr:    ":" + cfg.App.Port,
@@ -116,6 +130,19 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("GET /saving-goals/{uuid}", a.authMiddleware.RequireAuth(a.savingGoalHandler.Get))
 	mux.HandleFunc("PUT /saving-goals/{uuid}", a.authMiddleware.RequireAuth(a.savingGoalHandler.Update))
 	mux.HandleFunc("DELETE /saving-goals/{uuid}", a.authMiddleware.RequireAuth(a.savingGoalHandler.Delete))
+
+	// Public Routes (Prices) - No auth required for price lookup
+	mux.HandleFunc("GET /prices/crypto/{symbol}", a.priceHandler.GetCryptoPrice)
+	mux.HandleFunc("GET /prices/stock/{symbol}", a.priceHandler.GetStockPrice)
+
+	// Protected Routes (Asset Price History)
+	mux.HandleFunc("GET /assets/{uuid}/prices", a.authMiddleware.RequireAuth(a.assetPriceHistoryHandler.GetPriceHistory))
+	mux.HandleFunc("POST /assets/{uuid}/prices", a.authMiddleware.RequireAuth(a.assetPriceHistoryHandler.RecordPrice))
+	mux.HandleFunc("POST /assets/{uuid}/prices/fetch", a.authMiddleware.RequireAuth(a.assetPriceHistoryHandler.FetchAndRecordPrice))
+
+	// Protected Routes (Insights)
+	mux.HandleFunc("GET /insights/cashflow", a.authMiddleware.RequireAuth(a.insightHandler.GetCashflow))
+	mux.HandleFunc("GET /insights/overview", a.authMiddleware.RequireAuth(a.insightHandler.GetOverview))
 
 	return mux
 }

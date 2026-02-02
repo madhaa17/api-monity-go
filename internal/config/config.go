@@ -3,9 +3,17 @@ package config
 import "strconv"
 
 type Config struct {
-	App      AppConfig
-	Database DatabaseConfig
-	Jwt      JwtConfig
+	App       AppConfig
+	Database  DatabaseConfig
+	Jwt       JwtConfig
+	PriceAPI  PriceAPIConfig
+}
+
+type PriceAPIConfig struct {
+	CryptoAPI    string
+	CryptoAPIKey string
+	StockAPI     string
+	CacheTTL     int // in seconds
 }
 
 type AppConfig struct {
@@ -33,6 +41,7 @@ func Load() (*Config, error) {
 
 	maxOpen, _ := strconv.Atoi(getEnv("DATABASE_MAX_OPEN_CONNECTIONS", "10"))
 	maxIdle, _ := strconv.Atoi(getEnv("DATABASE_MAX_IDLE_CONNECTIONS", "10"))
+	cacheTTL, _ := strconv.Atoi(getEnv("REDIS_TTL_PRICE", "60"))
 
 	return &Config{
 		App: AppConfig{
@@ -51,6 +60,12 @@ func Load() (*Config, error) {
 		Jwt: JwtConfig{
 			Secret:         getEnv("JWT_SECRET", "secret"),
 			ExpirationTime: getEnv("JWT_EXPIRATION_TIME", "1h"),
+		},
+		PriceAPI: PriceAPIConfig{
+			CryptoAPI:    getEnv("CRYPTO_PRICE_API", "https://pro-api.coinmarketcap.com"),
+			CryptoAPIKey: getEnv("CRYPTO_PRICE_API_KEY", ""),
+			StockAPI:     getEnv("STOCK_PRICE_API", "https://query1.finance.yahoo.com"),
+			CacheTTL:     cacheTTL,
 		},
 	}, nil
 }

@@ -1,5 +1,3 @@
-Sesuaikan penulisan schema dengan golang!
-
 model User {
   id        BigInt   @id @default(autoincrement())
   uuid      String   @unique @default(uuid())

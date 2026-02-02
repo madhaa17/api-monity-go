@@ -1,21 +1,60 @@
 {
   "info": {
+    "_postman_id": "finance-tracker-api",
     "name": "Finance Tracker API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {"key": "baseUrl", "value": "http://localhost:8080/api/v1", "type": "string"},
-    {"key": "authToken", "value": "", "type": "string"},
-    {"key": "assetUuid", "value": "", "type": "string"},
-    {"key": "expenseUuid", "value": "", "type": "string"},
-    {"key": "incomeUuid", "value": "", "type": "string"},
-    {"key": "savingGoalUuid", "value": "", "type": "string"}
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "assetUuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "expenseUuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incomeUuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "savingGoalUuid",
+      "value": "",
+      "type": "string"
+    }
   ],
   "item": [
     {
       "name": "Health",
       "item": [
-        {"name": "Health Check", "request": {"method": "GET", "header": [], "url": {"raw": "http://localhost:8080/health", "host": ["http://localhost:8080"], "path": ["health"]}}}
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["health"]
+            }
+          },
+          "response": []
+        }
       ]
     },
     {
@@ -23,23 +62,79 @@
       "item": [
         {
           "name": "Register",
-          "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 201) { var json = pm.response.json(); if (json.data && json.data.Token) { pm.collectionVariables.set('authToken', json.data.Token); }}"], "type": "text/javascript"}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.Token) {",
+                  "        pm.collectionVariables.set('authToken', json.data.Token);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {"mode": "raw", "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securepassword123\",\n  \"name\": \"John Doe\"\n}"},
-            "url": {"raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"]}
-          }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securepassword123\",\n  \"name\": \"John Doe\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            }
+          },
+          "response": []
         },
         {
           "name": "Login",
-          "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 200) { var json = pm.response.json(); if (json.data && json.data.Token) { pm.collectionVariables.set('authToken', json.data.Token); }}"], "type": "text/javascript"}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.Token) {",
+                  "        pm.collectionVariables.set('authToken', json.data.Token);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {"mode": "raw", "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securepassword123\"\n}"},
-            "url": {"raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"]}
-          }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securepassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -48,21 +143,194 @@
       "item": [
         {
           "name": "Create",
-          "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 201) { var json = pm.response.json(); if (json.data && json.data.uuid) { pm.collectionVariables.set('assetUuid', json.data.uuid); }}"], "type": "text/javascript"}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.uuid) {",
+                  "        pm.collectionVariables.set('assetUuid', json.data.uuid);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{authToken}}"}],
-            "body": {"mode": "raw", "raw": "{\n  \"name\": \"Bitcoin\",\n  \"type\": \"CRYPTO\",\n  \"quantity\": 0.5,\n  \"symbol\": \"BTC\"\n}"},
-            "url": {"raw": "{{baseUrl}}/assets", "host": ["{{baseUrl}}"], "path": ["assets"]}
-          }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bitcoin\",\n  \"type\": \"CRYPTO\",\n  \"quantity\": 0.5,\n  \"symbol\": \"BTC\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/assets",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets"]
+            }
+          },
+          "response": []
         },
-        {"name": "List", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/assets", "host": ["{{baseUrl}}"], "path": ["assets"]}}},
-        {"name": "Get", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/assets/{{assetUuid}}", "host": ["{{baseUrl}}"], "path": ["assets", "{{assetUuid}}"]}}},
-        {"name": "Update", "request": {"method": "PUT", "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{authToken}}"}], "body": {"mode": "raw", "raw": "{\n  \"quantity\": 0.75\n}"}, "url": {"raw": "{{baseUrl}}/assets/{{assetUuid}}", "host": ["{{baseUrl}}"], "path": ["assets", "{{assetUuid}}"]}}},
-        {"name": "Delete", "request": {"method": "DELETE", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/assets/{{assetUuid}}", "host": ["{{baseUrl}}"], "path": ["assets", "{{assetUuid}}"]}}},
-        {"name": "Get Price History", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/assets/{{assetUuid}}/prices?limit=30", "host": ["{{baseUrl}}"], "path": ["assets", "{{assetUuid}}", "prices"], "query": [{"key": "limit", "value": "30"}]}}},
-        {"name": "Record Price", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{authToken}}"}], "body": {"mode": "raw", "raw": "{\n  \"price\": 42000.50,\n  \"source\": \"manual\",\n  \"recordedAt\": \"2026-02-01T12:00:00Z\"\n}"}, "url": {"raw": "{{baseUrl}}/assets/{{assetUuid}}/prices", "host": ["{{baseUrl}}"], "path": ["assets", "{{assetUuid}}", "prices"]}}},
-        {"name": "Fetch Price", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/assets/{{assetUuid}}/prices/fetch", "host": ["{{baseUrl}}"], "path": ["assets", "{{assetUuid}}", "prices", "fetch"]}}}
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/assets",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/assets/{{assetUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets", "{{assetUuid}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 0.75\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/assets/{{assetUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets", "{{assetUuid}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/assets/{{assetUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets", "{{assetUuid}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Price History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/assets/{{assetUuid}}/prices?limit=30",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets", "{{assetUuid}}", "prices"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "30"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Record Price",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 42000.50,\n  \"source\": \"manual\",\n  \"recordedAt\": \"2026-02-01T12:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/assets/{{assetUuid}}/prices",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets", "{{assetUuid}}", "prices"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Fetch Price",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/assets/{{assetUuid}}/prices/fetch",
+              "host": ["{{baseUrl}}"],
+              "path": ["assets", "{{assetUuid}}", "prices", "fetch"]
+            }
+          },
+          "response": []
+        }
       ]
     },
     {
@@ -70,18 +338,126 @@
       "item": [
         {
           "name": "Create",
-          "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 201) { var json = pm.response.json(); if (json.data && json.data.uuid) { pm.collectionVariables.set('expenseUuid', json.data.uuid); }}"], "type": "text/javascript"}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.uuid) {",
+                  "        pm.collectionVariables.set('expenseUuid', json.data.uuid);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{authToken}}"}],
-            "body": {"mode": "raw", "raw": "{\n  \"amount\": 50000,\n  \"category\": \"FOOD\",\n  \"note\": \"Lunch with team\",\n  \"date\": \"2026-01-31T12:00:00Z\"\n}"},
-            "url": {"raw": "{{baseUrl}}/expenses", "host": ["{{baseUrl}}"], "path": ["expenses"]}
-          }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 50000,\n  \"category\": \"FOOD\",\n  \"note\": \"Lunch with team\",\n  \"date\": \"2026-01-31T12:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/expenses",
+              "host": ["{{baseUrl}}"],
+              "path": ["expenses"]
+            }
+          },
+          "response": []
         },
-        {"name": "List", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/expenses", "host": ["{{baseUrl}}"], "path": ["expenses"]}}},
-        {"name": "Get", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/expenses/{{expenseUuid}}", "host": ["{{baseUrl}}"], "path": ["expenses", "{{expenseUuid}}"]}}},
-        {"name": "Update", "request": {"method": "PUT", "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{authToken}}"}], "body": {"mode": "raw", "raw": "{\n  \"amount\": 75000,\n  \"category\": \"ENTERTAINMENT\"\n}"}, "url": {"raw": "{{baseUrl}}/expenses/{{expenseUuid}}", "host": ["{{baseUrl}}"], "path": ["expenses", "{{expenseUuid}}"]}}},
-        {"name": "Delete", "request": {"method": "DELETE", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/expenses/{{expenseUuid}}", "host": ["{{baseUrl}}"], "path": ["expenses", "{{expenseUuid}}"]}}}
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/expenses",
+              "host": ["{{baseUrl}}"],
+              "path": ["expenses"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/expenses/{{expenseUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["expenses", "{{expenseUuid}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 75000,\n  \"category\": \"ENTERTAINMENT\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/expenses/{{expenseUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["expenses", "{{expenseUuid}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/expenses/{{expenseUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["expenses", "{{expenseUuid}}"]
+            }
+          },
+          "response": []
+        }
       ]
     },
     {
@@ -89,18 +465,126 @@
       "item": [
         {
           "name": "Create",
-          "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 201) { var json = pm.response.json(); if (json.data && json.data.uuid) { pm.collectionVariables.set('incomeUuid', json.data.uuid); }}"], "type": "text/javascript"}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.uuid) {",
+                  "        pm.collectionVariables.set('incomeUuid', json.data.uuid);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{authToken}}"}],
-            "body": {"mode": "raw", "raw": "{\n  \"amount\": 5000000,\n  \"source\": \"Monthly Salary\",\n  \"note\": \"January 2026 salary\",\n  \"date\": \"2026-01-31T12:00:00Z\"\n}"},
-            "url": {"raw": "{{baseUrl}}/incomes", "host": ["{{baseUrl}}"], "path": ["incomes"]}
-          }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 5000000,\n  \"source\": \"Monthly Salary\",\n  \"note\": \"January 2026 salary\",\n  \"date\": \"2026-01-31T12:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/incomes",
+              "host": ["{{baseUrl}}"],
+              "path": ["incomes"]
+            }
+          },
+          "response": []
         },
-        {"name": "List", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/incomes", "host": ["{{baseUrl}}"], "path": ["incomes"]}}},
-        {"name": "Get", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/incomes/{{incomeUuid}}", "host": ["{{baseUrl}}"], "path": ["incomes", "{{incomeUuid}}"]}}},
-        {"name": "Update", "request": {"method": "PUT", "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{authToken}}"}], "body": {"mode": "raw", "raw": "{\n  \"amount\": 5500000,\n  \"source\": \"Monthly Salary + Bonus\"\n}"}, "url": {"raw": "{{baseUrl}}/incomes/{{incomeUuid}}", "host": ["{{baseUrl}}"], "path": ["incomes", "{{incomeUuid}}"]}}},
-        {"name": "Delete", "request": {"method": "DELETE", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/incomes/{{incomeUuid}}", "host": ["{{baseUrl}}"], "path": ["incomes", "{{incomeUuid}}"]}}}
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/incomes",
+              "host": ["{{baseUrl}}"],
+              "path": ["incomes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/incomes/{{incomeUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["incomes", "{{incomeUuid}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 5500000,\n  \"source\": \"Monthly Salary + Bonus\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/incomes/{{incomeUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["incomes", "{{incomeUuid}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/incomes/{{incomeUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["incomes", "{{incomeUuid}}"]
+            }
+          },
+          "response": []
+        }
       ]
     },
     {
@@ -108,36 +592,273 @@
       "item": [
         {
           "name": "Create",
-          "event": [{"listen": "test", "script": {"exec": ["if (pm.response.code === 201) { var json = pm.response.json(); if (json.data && json.data.uuid) { pm.collectionVariables.set('savingGoalUuid', json.data.uuid); }}"], "type": "text/javascript"}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.uuid) {",
+                  "        pm.collectionVariables.set('savingGoalUuid', json.data.uuid);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{authToken}}"}],
-            "body": {"mode": "raw", "raw": "{\n  \"title\": \"Emergency Fund\",\n  \"targetAmount\": 50000000,\n  \"currentAmount\": 10000000,\n  \"deadline\": \"2026-12-31T23:59:59Z\"\n}"},
-            "url": {"raw": "{{baseUrl}}/saving-goals", "host": ["{{baseUrl}}"], "path": ["saving-goals"]}
-          }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Emergency Fund\",\n  \"targetAmount\": 50000000,\n  \"currentAmount\": 10000000,\n  \"deadline\": \"2026-12-31T23:59:59Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/saving-goals",
+              "host": ["{{baseUrl}}"],
+              "path": ["saving-goals"]
+            }
+          },
+          "response": []
         },
-        {"name": "List", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/saving-goals", "host": ["{{baseUrl}}"], "path": ["saving-goals"]}}},
-        {"name": "Get", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/saving-goals/{{savingGoalUuid}}", "host": ["{{baseUrl}}"], "path": ["saving-goals", "{{savingGoalUuid}}"]}}},
-        {"name": "Update", "request": {"method": "PUT", "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{authToken}}"}], "body": {"mode": "raw", "raw": "{\n  \"currentAmount\": 25000000\n}"}, "url": {"raw": "{{baseUrl}}/saving-goals/{{savingGoalUuid}}", "host": ["{{baseUrl}}"], "path": ["saving-goals", "{{savingGoalUuid}}"]}}},
-        {"name": "Delete", "request": {"method": "DELETE", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/saving-goals/{{savingGoalUuid}}", "host": ["{{baseUrl}}"], "path": ["saving-goals", "{{savingGoalUuid}}"]}}}
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/saving-goals",
+              "host": ["{{baseUrl}}"],
+              "path": ["saving-goals"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/saving-goals/{{savingGoalUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["saving-goals", "{{savingGoalUuid}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentAmount\": 25000000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/saving-goals/{{savingGoalUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["saving-goals", "{{savingGoalUuid}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/saving-goals/{{savingGoalUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["saving-goals", "{{savingGoalUuid}}"]
+            }
+          },
+          "response": []
+        }
       ]
     },
     {
       "name": "Prices",
       "item": [
-        {"name": "Crypto BTC/USD", "request": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/prices/crypto/BTC", "host": ["{{baseUrl}}"], "path": ["prices", "crypto", "BTC"]}}},
-        {"name": "Crypto BTC/IDR", "request": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/prices/crypto/BTC?currency=IDR", "host": ["{{baseUrl}}"], "path": ["prices", "crypto", "BTC"], "query": [{"key": "currency", "value": "IDR"}]}}},
-        {"name": "Crypto ETH/USD", "request": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/prices/crypto/ETH", "host": ["{{baseUrl}}"], "path": ["prices", "crypto", "ETH"]}}},
-        {"name": "Stock AAPL/USD", "request": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/prices/stock/AAPL", "host": ["{{baseUrl}}"], "path": ["prices", "stock", "AAPL"]}}},
-        {"name": "Stock AAPL/IDR", "request": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/prices/stock/AAPL?currency=IDR", "host": ["{{baseUrl}}"], "path": ["prices", "stock", "AAPL"], "query": [{"key": "currency", "value": "IDR"]}}}
+        {
+          "name": "Crypto BTC/USD",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prices/crypto/BTC",
+              "host": ["{{baseUrl}}"],
+              "path": ["prices", "crypto", "BTC"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Crypto BTC/IDR",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prices/crypto/BTC?currency=IDR",
+              "host": ["{{baseUrl}}"],
+              "path": ["prices", "crypto", "BTC"],
+              "query": [
+                {
+                  "key": "currency",
+                  "value": "IDR"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Crypto ETH/USD",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prices/crypto/ETH",
+              "host": ["{{baseUrl}}"],
+              "path": ["prices", "crypto", "ETH"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Stock AAPL/USD",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prices/stock/AAPL",
+              "host": ["{{baseUrl}}"],
+              "path": ["prices", "stock", "AAPL"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Stock AAPL/IDR",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prices/stock/AAPL?currency=IDR",
+              "host": ["{{baseUrl}}"],
+              "path": ["prices", "stock", "AAPL"],
+              "query": [
+                {
+                  "key": "currency",
+                  "value": "IDR"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
       ]
     },
     {
       "name": "Insights",
       "item": [
-        {"name": "Cashflow", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/insights/cashflow", "host": ["{{baseUrl}}"], "path": ["insights", "cashflow"]}}},
-        {"name": "Cashflow by Month", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/insights/cashflow?month=2026-01", "host": ["{{baseUrl}}"], "path": ["insights", "cashflow"], "query": [{"key": "month", "value": "2026-01"}]}}},
-        {"name": "Overview", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{authToken}}"}], "url": {"raw": "{{baseUrl}}/insights/overview", "host": ["{{baseUrl}}"], "path": ["insights", "overview"]}}}
+        {
+          "name": "Cashflow",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/insights/cashflow",
+              "host": ["{{baseUrl}}"],
+              "path": ["insights", "cashflow"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cashflow by Month",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/insights/cashflow?month=2026-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["insights", "cashflow"],
+              "query": [
+                {
+                  "key": "month",
+                  "value": "2026-01"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Overview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/insights/overview",
+              "host": ["{{baseUrl}}"],
+              "path": ["insights", "overview"]
+            }
+          },
+          "response": []
+        }
       ]
     }
   ]

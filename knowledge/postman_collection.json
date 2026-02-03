@@ -212,9 +212,15 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/assets/{{assetUuid}}",
+              "raw": "{{baseUrl}}/assets/:uuid",
               "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetUuid}}"]
+              "path": ["assets", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{assetUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -238,9 +244,15 @@
               "raw": "{\n  \"quantity\": 0.75\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/assets/{{assetUuid}}",
+              "raw": "{{baseUrl}}/assets/:uuid",
               "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetUuid}}"]
+              "path": ["assets", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{assetUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -256,9 +268,15 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/assets/{{assetUuid}}",
+              "raw": "{{baseUrl}}/assets/:uuid",
               "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetUuid}}"]
+              "path": ["assets", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{assetUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -274,13 +292,19 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/assets/{{assetUuid}}/prices?limit=30",
+              "raw": "{{baseUrl}}/assets/:uuid/prices?limit=30",
               "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetUuid}}", "prices"],
+              "path": ["assets", ":uuid", "prices"],
               "query": [
                 {
                   "key": "limit",
                   "value": "30"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{assetUuid}}"
                 }
               ]
             }
@@ -306,9 +330,15 @@
               "raw": "{\n  \"price\": 42000.50,\n  \"source\": \"manual\",\n  \"recordedAt\": \"2026-02-01T12:00:00Z\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/assets/{{assetUuid}}/prices",
+              "raw": "{{baseUrl}}/assets/:uuid/prices",
               "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetUuid}}", "prices"]
+              "path": ["assets", ":uuid", "prices"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{assetUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -324,9 +354,15 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/assets/{{assetUuid}}/prices/fetch",
+              "raw": "{{baseUrl}}/assets/:uuid/prices/fetch",
               "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetUuid}}", "prices", "fetch"]
+              "path": ["assets", ":uuid", "prices", "fetch"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{assetUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -407,9 +443,15 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/expenses/{{expenseUuid}}",
+              "raw": "{{baseUrl}}/expenses/:uuid",
               "host": ["{{baseUrl}}"],
-              "path": ["expenses", "{{expenseUuid}}"]
+              "path": ["expenses", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{expenseUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -433,9 +475,15 @@
               "raw": "{\n  \"amount\": 75000,\n  \"category\": \"ENTERTAINMENT\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/expenses/{{expenseUuid}}",
+              "raw": "{{baseUrl}}/expenses/:uuid",
               "host": ["{{baseUrl}}"],
-              "path": ["expenses", "{{expenseUuid}}"]
+              "path": ["expenses", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{expenseUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -451,9 +499,15 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/expenses/{{expenseUuid}}",
+              "raw": "{{baseUrl}}/expenses/:uuid",
               "host": ["{{baseUrl}}"],
-              "path": ["expenses", "{{expenseUuid}}"]
+              "path": ["expenses", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{expenseUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -534,9 +588,15 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/incomes/{{incomeUuid}}",
+              "raw": "{{baseUrl}}/incomes/:uuid",
               "host": ["{{baseUrl}}"],
-              "path": ["incomes", "{{incomeUuid}}"]
+              "path": ["incomes", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{incomeUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -560,9 +620,15 @@
               "raw": "{\n  \"amount\": 5500000,\n  \"source\": \"Monthly Salary + Bonus\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/incomes/{{incomeUuid}}",
+              "raw": "{{baseUrl}}/incomes/:uuid",
               "host": ["{{baseUrl}}"],
-              "path": ["incomes", "{{incomeUuid}}"]
+              "path": ["incomes", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{incomeUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -578,9 +644,15 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/incomes/{{incomeUuid}}",
+              "raw": "{{baseUrl}}/incomes/:uuid",
               "host": ["{{baseUrl}}"],
-              "path": ["incomes", "{{incomeUuid}}"]
+              "path": ["incomes", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{incomeUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -661,9 +733,15 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/saving-goals/{{savingGoalUuid}}",
+              "raw": "{{baseUrl}}/saving-goals/:uuid",
               "host": ["{{baseUrl}}"],
-              "path": ["saving-goals", "{{savingGoalUuid}}"]
+              "path": ["saving-goals", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{savingGoalUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -687,9 +765,15 @@
               "raw": "{\n  \"currentAmount\": 25000000\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/saving-goals/{{savingGoalUuid}}",
+              "raw": "{{baseUrl}}/saving-goals/:uuid",
               "host": ["{{baseUrl}}"],
-              "path": ["saving-goals", "{{savingGoalUuid}}"]
+              "path": ["saving-goals", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{savingGoalUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -705,9 +789,15 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/saving-goals/{{savingGoalUuid}}",
+              "raw": "{{baseUrl}}/saving-goals/:uuid",
               "host": ["{{baseUrl}}"],
-              "path": ["saving-goals", "{{savingGoalUuid}}"]
+              "path": ["saving-goals", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{savingGoalUuid}}"
+                }
+              ]
             }
           },
           "response": []
@@ -723,9 +813,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/prices/crypto/BTC",
+              "raw": "{{baseUrl}}/prices/crypto/:symbol",
               "host": ["{{baseUrl}}"],
-              "path": ["prices", "crypto", "BTC"]
+              "path": ["prices", "crypto", ":symbol"],
+              "variable": [
+                {
+                  "key": "symbol",
+                  "value": "BTC"
+                }
+              ]
             }
           },
           "response": []
@@ -736,13 +832,19 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/prices/crypto/BTC?currency=IDR",
+              "raw": "{{baseUrl}}/prices/crypto/:symbol?currency=IDR",
               "host": ["{{baseUrl}}"],
-              "path": ["prices", "crypto", "BTC"],
+              "path": ["prices", "crypto", ":symbol"],
               "query": [
                 {
                   "key": "currency",
                   "value": "IDR"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "symbol",
+                  "value": "BTC"
                 }
               ]
             }
@@ -755,9 +857,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/prices/crypto/ETH",
+              "raw": "{{baseUrl}}/prices/crypto/:symbol",
               "host": ["{{baseUrl}}"],
-              "path": ["prices", "crypto", "ETH"]
+              "path": ["prices", "crypto", ":symbol"],
+              "variable": [
+                {
+                  "key": "symbol",
+                  "value": "ETH"
+                }
+              ]
             }
           },
           "response": []
@@ -768,9 +876,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/prices/stock/AAPL",
+              "raw": "{{baseUrl}}/prices/stock/:symbol",
               "host": ["{{baseUrl}}"],
-              "path": ["prices", "stock", "AAPL"]
+              "path": ["prices", "stock", ":symbol"],
+              "variable": [
+                {
+                  "key": "symbol",
+                  "value": "AAPL"
+                }
+              ]
             }
           },
           "response": []
@@ -781,13 +895,19 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/prices/stock/AAPL?currency=IDR",
+              "raw": "{{baseUrl}}/prices/stock/:symbol?currency=IDR",
               "host": ["{{baseUrl}}"],
-              "path": ["prices", "stock", "AAPL"],
+              "path": ["prices", "stock", ":symbol"],
               "query": [
                 {
                   "key": "currency",
                   "value": "IDR"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "symbol",
+                  "value": "AAPL"
                 }
               ]
             }
@@ -855,6 +975,53 @@
               "raw": "{{baseUrl}}/insights/overview",
               "host": ["{{baseUrl}}"],
               "path": ["insights", "overview"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Portfolio",
+      "item": [
+        {
+          "name": "Get Portfolio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/portfolio",
+              "host": ["{{baseUrl}}"],
+              "path": ["portfolio"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Asset Value",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/portfolio/assets/:uuid",
+              "host": ["{{baseUrl}}"],
+              "path": ["portfolio", "assets", ":uuid"],
+              "variable": [
+                {
+                  "key": "uuid",
+                  "value": "{{assetUuid}}"
+                }
+              ]
             }
           },
           "response": []

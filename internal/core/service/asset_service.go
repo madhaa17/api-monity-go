@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"monity/internal/core/port"
 	"monity/internal/models"
@@ -20,12 +21,73 @@ func NewAssetService(repo port.AssetRepository) port.AssetService {
 }
 
 func (s *AssetService) CreateAsset(ctx context.Context, userID int64, req port.CreateAssetRequest) (*models.Asset, error) {
+	// Parse purchase date
+	purchaseDate := time.Now()
+	if req.PurchaseDate != "" {
+		parsed, err := time.Parse(time.RFC3339, req.PurchaseDate)
+		if err != nil {
+			return nil, fmt.Errorf("invalid purchase date format: %w", err)
+		}
+		purchaseDate = parsed
+	}
+	
+	// Default values
+	purchaseCurrency := "USD"
+	if req.PurchaseCurrency != "" {
+		purchaseCurrency = req.PurchaseCurrency
+	}
+	
+	status := models.AssetStatusActive
+	if req.Status != nil {
+		status = *req.Status
+	}
+	
 	asset := &models.Asset{
 		UserID:   userID,
 		Name:     req.Name,
 		Type:     req.Type,
 		Quantity: decimal.NewFromFloat(req.Quantity),
 		Symbol:   req.Symbol,
+		
+		// Purchase Information
+		PurchasePrice:    decimal.NewFromFloat(req.PurchasePrice),
+		PurchaseDate:     purchaseDate,
+		PurchaseCurrency: purchaseCurrency,
+		TotalCost:        decimal.NewFromFloat(req.TotalCost),
+		
+		// Documentation
+		Description: req.Description,
+		Notes:       req.Notes,
+		
+		// Status
+		Status: status,
+	}
+	
+	// Optional fields
+	if req.TransactionFee != nil {
+		fee := decimal.NewFromFloat(*req.TransactionFee)
+		asset.TransactionFee = &fee
+	}
+	if req.MaintenanceCost != nil {
+		cost := decimal.NewFromFloat(*req.MaintenanceCost)
+		asset.MaintenanceCost = &cost
+	}
+	if req.TargetPrice != nil {
+		price := decimal.NewFromFloat(*req.TargetPrice)
+		asset.TargetPrice = &price
+	}
+	if req.TargetDate != nil {
+		parsed, err := time.Parse(time.RFC3339, *req.TargetDate)
+		if err == nil {
+			asset.TargetDate = &parsed
+		}
+	}
+	if req.EstimatedYield != nil {
+		yield := decimal.NewFromFloat(*req.EstimatedYield)
+		asset.EstimatedYield = &yield
+	}
+	if req.YieldPeriod != nil {
+		asset.YieldPeriod = req.YieldPeriod
 	}
 
 	if err := s.repo.Create(ctx, asset); err != nil {
@@ -62,6 +124,7 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 		return nil, err
 	}
 
+	// Basic fields
 	if req.Name != nil {
 		asset.Name = *req.Name
 	}
@@ -73,6 +136,78 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 	}
 	if req.Symbol != nil {
 		asset.Symbol = req.Symbol
+	}
+	
+	// Purchase Information
+	if req.PurchasePrice != nil {
+		asset.PurchasePrice = decimal.NewFromFloat(*req.PurchasePrice)
+	}
+	if req.PurchaseDate != nil {
+		parsed, err := time.Parse(time.RFC3339, *req.PurchaseDate)
+		if err != nil {
+			return nil, fmt.Errorf("invalid purchase date format: %w", err)
+		}
+		asset.PurchaseDate = parsed
+	}
+	if req.PurchaseCurrency != nil {
+		asset.PurchaseCurrency = *req.PurchaseCurrency
+	}
+	if req.TotalCost != nil {
+		asset.TotalCost = decimal.NewFromFloat(*req.TotalCost)
+	}
+	
+	// Additional Costs
+	if req.TransactionFee != nil {
+		fee := decimal.NewFromFloat(*req.TransactionFee)
+		asset.TransactionFee = &fee
+	}
+	if req.MaintenanceCost != nil {
+		cost := decimal.NewFromFloat(*req.MaintenanceCost)
+		asset.MaintenanceCost = &cost
+	}
+	
+	// Target & Planning
+	if req.TargetPrice != nil {
+		price := decimal.NewFromFloat(*req.TargetPrice)
+		asset.TargetPrice = &price
+	}
+	if req.TargetDate != nil {
+		parsed, err := time.Parse(time.RFC3339, *req.TargetDate)
+		if err == nil {
+			asset.TargetDate = &parsed
+		}
+	}
+	
+	// Real Asset Specific
+	if req.EstimatedYield != nil {
+		yield := decimal.NewFromFloat(*req.EstimatedYield)
+		asset.EstimatedYield = &yield
+	}
+	if req.YieldPeriod != nil {
+		asset.YieldPeriod = req.YieldPeriod
+	}
+	
+	// Documentation
+	if req.Description != nil {
+		asset.Description = req.Description
+	}
+	if req.Notes != nil {
+		asset.Notes = req.Notes
+	}
+	
+	// Status
+	if req.Status != nil {
+		asset.Status = *req.Status
+	}
+	if req.SoldAt != nil {
+		parsed, err := time.Parse(time.RFC3339, *req.SoldAt)
+		if err == nil {
+			asset.SoldAt = &parsed
+		}
+	}
+	if req.SoldPrice != nil {
+		price := decimal.NewFromFloat(*req.SoldPrice)
+		asset.SoldPrice = &price
 	}
 
 	if err := s.repo.Update(ctx, asset); err != nil {

@@ -10,9 +10,19 @@ const (
 type AssetType string
 
 const (
-	AssetTypeCrypto AssetType = "CRYPTO"
-	AssetTypeStock  AssetType = "STOCK"
-	AssetTypeOther  AssetType = "OTHER"
+	AssetTypeCrypto     AssetType = "CRYPTO"
+	AssetTypeStock      AssetType = "STOCK"
+	AssetTypeCash       AssetType = "CASH"
+	AssetTypeRealEstate AssetType = "REAL_ESTATE"
+	AssetTypeOther      AssetType = "OTHER"
+)
+
+type AssetStatus string
+
+const (
+	AssetStatusActive  AssetStatus = "ACTIVE"
+	AssetStatusSold    AssetStatus = "SOLD"
+	AssetStatusPlanned AssetStatus = "PLANNED"
 )
 
 type ExpenseCategory string

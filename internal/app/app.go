@@ -39,6 +39,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB) *App {
 	assetPriceHistorySvc := service.NewAssetPriceHistoryService(assetPriceHistoryRepo, assetRepo, priceSvc)
 	insightSvc := service.NewInsightService(insightRepo)
 	portfolioSvc := service.NewPortfolioService(assetRepo, priceSvc)
+	performanceSvc := service.NewPerformanceService(assetRepo, priceSvc)
 
 	authMiddleware := middleware.NewAuthMiddleware(cfg)
 
@@ -52,6 +53,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB) *App {
 		AssetPriceHistory: handler.NewAssetPriceHistoryHandler(assetPriceHistorySvc),
 		Insight:           handler.NewInsightHandler(insightSvc),
 		Portfolio:         handler.NewPortfolioHandler(portfolioSvc),
+		Performance:       handler.NewPerformanceHandler(performanceSvc),
 	}
 
 	router := routes.New(authMiddleware, handlers)

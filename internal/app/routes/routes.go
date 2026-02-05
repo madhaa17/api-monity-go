@@ -19,6 +19,7 @@ type Handlers struct {
 	AssetPriceHistory *handler.AssetPriceHistoryHandler
 	Insight           *handler.InsightHandler
 	Portfolio         *handler.PortfolioHandler
+	Performance       *handler.PerformanceHandler
 }
 
 type Router struct {
@@ -44,6 +45,7 @@ func (r *Router) Setup() *http.ServeMux {
 	r.registerPriceRoutes()
 	r.registerInsightRoutes()
 	r.registerPortfolioRoutes()
+	r.registerPerformanceRoutes()
 	return r.mux
 }
 

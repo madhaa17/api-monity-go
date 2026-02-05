@@ -63,7 +63,7 @@ func (m *AuthMiddleware) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 
 		// Extract claims (safely handling types)
 		userIDFloat, okID := claims["sub"].(float64)
-		uuid, okUUID := claims["uuid"].(string) 
+		uuid, okUUID := claims["uuid"].(string)
 		role, okRole := claims["role"].(string)
 
 		if !okID || !okUUID {

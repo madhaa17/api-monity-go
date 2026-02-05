@@ -30,6 +30,33 @@ model Asset {
   quantity  Decimal  @db.Decimal(20, 8)
   symbol    String?
 
+  // Purchase Information
+  purchasePrice    Decimal  @db.Decimal(20, 8) @default(0)
+  purchaseDate     DateTime
+  purchaseCurrency String   @default("USD")
+  totalCost        Decimal  @db.Decimal(20, 8) @default(0)
+
+  // Additional Costs (optional)
+  transactionFee  Decimal? @db.Decimal(20, 8)
+  maintenanceCost Decimal? @db.Decimal(20, 8)
+
+  // Target & Planning (optional)
+  targetPrice Decimal?  @db.Decimal(20, 8)
+  targetDate  DateTime?
+
+  // Real Asset Specific (optional)
+  estimatedYield Decimal? @db.Decimal(20, 8)
+  yieldPeriod    String?
+
+  // Documentation (optional)
+  description String?
+  notes       String?
+
+  // Status
+  status    AssetStatus @default(ACTIVE)
+  soldAt    DateTime?
+  soldPrice Decimal?    @db.Decimal(20, 8)
+
   priceHistories AssetPriceHistory[]
 
   createdAt DateTime @default(now())
@@ -37,6 +64,8 @@ model Asset {
 
   @@index([userId])
   @@index([uuid])
+  @@index([status])
+  @@index([purchaseDate])
 }
 
 model AssetPriceHistory {

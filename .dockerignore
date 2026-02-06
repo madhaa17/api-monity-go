@@ -1,0 +1,9 @@
+.git
+.env
+.env.*
+!.env.example
+*.md
+knowledge/
+Dockerfile
+docker-compose*.yml
+.dockerignore

@@ -20,9 +20,9 @@ WORKDIR /app
 
 COPY --from=builder /server .
 
-EXPOSE 8080
+EXPOSE 8386
 
 # Listen on all interfaces (required for Docker/Dokploy)
-ENV APP_PORT=8080
+ENV APP_PORT=8386
 
 ENTRYPOINT ["./server"]

@@ -10,7 +10,7 @@ services:
     env_file: .env
     environment:
       APP_ENV: production
-      APP_PORT: "8080"
+      APP_PORT: "8386"
       DATABASE_HOST: ${DATABASE_HOST}
       DATABASE_PORT: "5433"
       DATABASE_USER: ${DATABASE_USER}

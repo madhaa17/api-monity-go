@@ -20,9 +20,8 @@ WORKDIR /app
 
 COPY --from=builder /server .
 
-EXPOSE 8386
-
-# Listen on all interfaces (required for Docker/Dokploy)
-ENV APP_PORT=8386
+# 8080 = local default; production uses APP_PORT=8386 via docker-compose
+EXPOSE 8080
+ENV APP_PORT=8080
 
 ENTRYPOINT ["./server"]

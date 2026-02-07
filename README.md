@@ -59,12 +59,12 @@ backend/
 
    ```bash
    go run ./cmd/server
-   # Default: http://localhost:8080
+   # Local: http://localhost:8080 (APP_PORT in .env)
    ```
 
 ## API overview
 
-- **Base URL:** `http://localhost:8080` (or your deployment domain)
+- **Local:** `http://localhost:8080` · **Production:** port 8386 (or your deployment domain)
 - **API prefix:** `/api/v1`
 
 | Area         | Example endpoints                      | Auth   |

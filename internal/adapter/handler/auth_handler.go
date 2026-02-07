@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"monity/internal/core/port"
@@ -34,6 +35,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.svc.Register(r.Context(), req)
 	if err != nil {
+		log.Printf("[Register] error: %v", err)
 		if err.Error() == "email already registered" {
 			response.Error(w, http.StatusConflict, "registration failed", err.Error())
 			return

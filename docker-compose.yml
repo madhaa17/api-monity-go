@@ -11,36 +11,65 @@ services:
     environment:
       APP_ENV: production
       APP_PORT: "8386"
-      DATABASE_HOST: postgres
-      DATABASE_PORT: "5432"
-      DATABASE_USER: ${DATABASE_USER}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      DATABASE_NAME: ${DATABASE_NAME}
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      DATABASE_NAME: ${DATABASE_NAME:-monity_db}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_USERNAME: ${REDIS_USERNAME:-}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      REDIS_DB: "0"
+      REDIS_DB: ${REDIS_DB:-0}
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     networks:
       - dokploy-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.monity-api.rule=Host(`15.235.174.28`)"
+      - "traefik.http.routers.monity-api.rule=Host(`${DOMAIN:-15.235.174.28}`)"
       - "traefik.http.routers.monity-api.entrypoints=websecure"
       - "traefik.http.routers.monity-api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.monity-api.loadbalancer.server.port=8080"
+      - "traefik.http.services.monity-api.loadbalancer.server.port=8386"
+
+  migrate:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: ${DATABASE_HOST:-postgres}
+      PGPORT: ${DATABASE_PORT:-5432}
+      PGUSER: ${DATABASE_USER:-postgres}
+      PGPASSWORD: ${DATABASE_PASSWORD:-postgres}
+      PGDATABASE: ${DATABASE_NAME:-monity_db}
+    volumes:
+      - ./migrations:/migrations:ro
+    command: >
+      sh -c "
+        if psql -tAc \"SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='users'\" | grep -q 1; then
+          echo 'Migrations already applied, skipping.';
+        else
+          echo 'Running migrations...';
+          psql -v ON_ERROR_STOP=1 -f /migrations/001_initial_schema.up.sql &&
+          psql -v ON_ERROR_STOP=1 -f /migrations/002_enhance_assets.up.sql &&
+          echo 'Migrations done.';
+        fi
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dokploy-network
+    restart: "no"
 
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DATABASE_USER}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
-      POSTGRES_DB: ${DATABASE_NAME}
+      POSTGRES_USER: ${DATABASE_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      POSTGRES_DB: ${DATABASE_NAME:-monity_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

@@ -1,3 +1,5 @@
+# External DB: set DATABASE_* in Dokploy Environment, or use .env (env_file).
+# Defaults below so container gets values even when compose runs without .env (e.g. .env not in deploy context).
 services:
   app:
     build:
@@ -8,11 +10,11 @@ services:
     environment:
       APP_ENV: production
       APP_PORT: "8386"
-      DATABASE_HOST: ${DATABASE_HOST}
-      DATABASE_PORT: ${DATABASE_PORT}
-      DATABASE_USER: ${DATABASE_USER}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_HOST: ${DATABASE_HOST:-15.235.174.28}
+      DATABASE_PORT: ${DATABASE_PORT:-5433}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      DATABASE_NAME: ${DATABASE_NAME:-monity_db}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_USERNAME: ${REDIS_USERNAME:-}

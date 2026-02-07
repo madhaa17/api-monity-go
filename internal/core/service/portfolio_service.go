@@ -52,7 +52,10 @@ func (s *PortfolioService) GetPortfolio(ctx context.Context, userID int64, curre
 			}
 		}
 		assetValues = append(assetValues, *assetValue)
-		totalValue = totalValue.Add(assetValue.Value)
+		// Only sum into total when asset value is in the requested currency (avoid mixing IDR+USD)
+		if assetValue.Currency == currency {
+			totalValue = totalValue.Add(assetValue.Value)
+		}
 	}
 
 	return &port.PortfolioResponse{
@@ -80,18 +83,68 @@ func (s *PortfolioService) GetAssetValue(ctx context.Context, userID int64, asse
 }
 
 func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *models.Asset, currency string) (*port.AssetValueResponse, error) {
+	assetCurrency := asset.PurchaseCurrency
+	if assetCurrency == "" {
+		assetCurrency = "USD"
+	}
+
+	// No symbol: use type-specific logic for CASH, LIVESTOCK, REAL_ESTATE
 	if asset.Symbol == nil || *asset.Symbol == "" {
-		return &port.AssetValueResponse{
-			UUID:         asset.UUID,
-			Name:         asset.Name,
-			Type:         string(asset.Type),
-			Symbol:       s.getSymbolString(asset.Symbol),
-			Quantity:     asset.Quantity,
-			CurrentPrice: decimal.Zero,
-			Value:        decimal.Zero,
-			Currency:     currency,
-			PriceSource:  "no_symbol",
-		}, nil
+		switch asset.Type {
+		case models.AssetTypeCash:
+			// 1 unit of currency = 1 (e.g. 10_000_000 IDR = 10_000_000)
+			one := decimal.NewFromInt(1)
+			return &port.AssetValueResponse{
+				UUID:         asset.UUID,
+				Name:         asset.Name,
+				Type:         string(asset.Type),
+				Symbol:       s.getSymbolString(asset.Symbol),
+				Quantity:     asset.Quantity,
+				CurrentPrice: one,
+				Value:        asset.Quantity,
+				Currency:     assetCurrency,
+				PriceSource:  "cash_unit",
+			}, nil
+		case models.AssetTypeLivestock, models.AssetTypeRealEstate:
+			// Use purchase price per unit as manual "current" price
+			if asset.PurchasePrice.IsZero() {
+				return &port.AssetValueResponse{
+					UUID:         asset.UUID,
+					Name:         asset.Name,
+					Type:         string(asset.Type),
+					Symbol:       s.getSymbolString(asset.Symbol),
+					Quantity:     asset.Quantity,
+					CurrentPrice: decimal.Zero,
+					Value:        decimal.Zero,
+					Currency:     assetCurrency,
+					PriceSource:  "no_symbol",
+				}, nil
+			}
+			value := asset.Quantity.Mul(asset.PurchasePrice)
+			return &port.AssetValueResponse{
+				UUID:         asset.UUID,
+				Name:         asset.Name,
+				Type:         string(asset.Type),
+				Symbol:       s.getSymbolString(asset.Symbol),
+				Quantity:     asset.Quantity,
+				CurrentPrice: asset.PurchasePrice,
+				Value:        value,
+				Currency:     assetCurrency,
+				PriceSource:  "manual",
+			}, nil
+		default:
+			return &port.AssetValueResponse{
+				UUID:         asset.UUID,
+				Name:         asset.Name,
+				Type:         string(asset.Type),
+				Symbol:       s.getSymbolString(asset.Symbol),
+				Quantity:     asset.Quantity,
+				CurrentPrice: decimal.Zero,
+				Value:        decimal.Zero,
+				Currency:     assetCurrency,
+				PriceSource:  "no_symbol",
+			}, nil
+		}
 	}
 
 	var priceData *port.PriceData

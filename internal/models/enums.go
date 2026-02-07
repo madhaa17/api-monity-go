@@ -14,6 +14,7 @@ const (
 	AssetTypeStock      AssetType = "STOCK"
 	AssetTypeCash       AssetType = "CASH"
 	AssetTypeRealEstate AssetType = "REAL_ESTATE"
+	AssetTypeLivestock  AssetType = "LIVESTOCK"
 	AssetTypeOther      AssetType = "OTHER"
 )
 

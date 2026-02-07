@@ -30,7 +30,7 @@ services:
       - dokploy-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.monity-api.rule=Host(`${DOMAIN:-15.235.174.28}`)"
+      - "traefik.http.routers.monity-api.rule=Host(`api-assetmonitor.my.id`)"
       - "traefik.http.routers.monity-api.entrypoints=websecure"
       - "traefik.http.routers.monity-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.monity-api.loadbalancer.server.port=8386"

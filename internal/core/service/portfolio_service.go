@@ -80,15 +80,18 @@ func (s *PortfolioService) GetAssetValue(ctx context.Context, userID int64, asse
 }
 
 func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *models.Asset, currency string) (*port.AssetValueResponse, error) {
-	// CASH, LIVESTOCK, REAL_ESTATE: use stored price (PurchasePrice or TotalCost/Quantity) from database
-	switch asset.Type {
-	case models.AssetTypeCash, models.AssetTypeLivestock, models.AssetTypeRealEstate:
-		return s.assetValueFromStoredPrice(asset, currency), nil
-	}
-
-	// No symbol: cannot fetch external price
 	if asset.Symbol == nil || *asset.Symbol == "" {
-		return s.assetValueFromStoredPrice(asset, currency), nil
+		return &port.AssetValueResponse{
+			UUID:         asset.UUID,
+			Name:         asset.Name,
+			Type:         string(asset.Type),
+			Symbol:       s.getSymbolString(asset.Symbol),
+			Quantity:     asset.Quantity,
+			CurrentPrice: decimal.Zero,
+			Value:        decimal.Zero,
+			Currency:     currency,
+			PriceSource:  "no_symbol",
+		}, nil
 	}
 
 	var priceData *port.PriceData
@@ -100,7 +103,17 @@ func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *model
 	case models.AssetTypeStock:
 		priceData, err = s.priceService.GetStockPriceWithCurrency(ctx, *asset.Symbol, currency)
 	default:
-		return s.assetValueFromStoredPrice(asset, currency), nil
+		return &port.AssetValueResponse{
+			UUID:         asset.UUID,
+			Name:         asset.Name,
+			Type:         string(asset.Type),
+			Symbol:       *asset.Symbol,
+			Quantity:     asset.Quantity,
+			CurrentPrice: decimal.Zero,
+			Value:        decimal.Zero,
+			Currency:     currency,
+			PriceSource:  "unsupported_type",
+		}, nil
 	}
 
 	if err != nil {
@@ -121,36 +134,6 @@ func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *model
 		Currency:     currency,
 		PriceSource:  priceData.Source,
 	}, nil
-}
-
-// assetValueFromStoredPrice uses PurchasePrice or TotalCost/Quantity from database (for CASH, LIVESTOCK, REAL_ESTATE, or when no symbol).
-func (s *PortfolioService) assetValueFromStoredPrice(asset *models.Asset, currency string) *port.AssetValueResponse {
-	currentPrice := asset.PurchasePrice
-	if currentPrice.IsZero() && !asset.Quantity.IsZero() {
-		currentPrice = asset.TotalCost.Div(asset.Quantity)
-	}
-	value := asset.Quantity.Mul(currentPrice)
-	if value.IsZero() && !asset.TotalCost.IsZero() {
-		value = asset.TotalCost
-		if !asset.Quantity.IsZero() {
-			currentPrice = asset.TotalCost.Div(asset.Quantity)
-		}
-	}
-	symbol := ""
-	if asset.Symbol != nil {
-		symbol = *asset.Symbol
-	}
-	return &port.AssetValueResponse{
-		UUID:         asset.UUID,
-		Name:         asset.Name,
-		Type:         string(asset.Type),
-		Symbol:       symbol,
-		Quantity:     asset.Quantity,
-		CurrentPrice: currentPrice,
-		Value:        value,
-		Currency:     currency,
-		PriceSource:  "database",
-	}
 }
 
 func (s *PortfolioService) getSymbolString(symbol *string) string {

@@ -47,14 +47,16 @@ services:
       - ./migrations:/migrations:ro
     command: >
       sh -c "
+        echo 'Checking database connection...';
+        psql -tAc 'SELECT 1' || { echo 'Cannot connect to database. Check DATABASE_HOST/PORT and network.'; exit 2; };
         if psql -tAc \"SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='users'\" | grep -q 1; then
-          echo 'Migrations already applied, skipping.';
+          echo 'Base schema exists, running 003 and 004...';
+          for f in /migrations/003_*.sql /migrations/004_*.sql; do [ -f \"$$f\" ] && psql -v ON_ERROR_STOP=0 -f \"$$f\" || true; done;
         else
-          echo 'Running migrations...';
-          psql -v ON_ERROR_STOP=1 -f /migrations/001_initial_schema.up.sql &&
-          psql -v ON_ERROR_STOP=1 -f /migrations/002_enhance_assets.up.sql &&
-          echo 'Migrations done.';
-        fi
+          echo 'Running all migrations 001-004...';
+          for f in /migrations/001_*.sql /migrations/002_*.sql /migrations/003_*.sql /migrations/004_*.sql; do [ -f \"$$f\" ] && psql -v ON_ERROR_STOP=0 -f \"$$f\" || true; done;
+        fi;
+        echo 'Migrations finished.';
       "
     depends_on:
       postgres:

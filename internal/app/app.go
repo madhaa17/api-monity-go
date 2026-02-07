@@ -59,6 +59,12 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB) *App {
 	router := routes.New(authMiddleware, handlers)
 	mux := router.Setup()
 
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	})
+
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 

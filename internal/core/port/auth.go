@@ -15,6 +15,7 @@ type UserRepository interface {
 type AuthService interface {
 	Register(ctx context.Context, req RegistryRequest) (*AuthResponse, error)
 	Login(ctx context.Context, req LoginRequest) (*AuthResponse, error)
+	Refresh(ctx context.Context, refreshToken string) (*AuthResponse, error)
 }
 
 // DTOs for Service layer - arguably could be in models or service package but keeping interfaces together
@@ -30,6 +31,7 @@ type LoginRequest struct {
 }
 
 type AuthResponse struct {
-	Token string
-	User  *models.User
+	Token        string
+	RefreshToken string
+	User         *models.User
 }

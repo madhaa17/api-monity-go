@@ -57,10 +57,15 @@ func (s *AuthService) Register(ctx context.Context, req port.RegistryRequest) (*
 	if err != nil {
 		return nil, fmt.Errorf("generate token: %w", err)
 	}
+	refreshToken, err := s.generateRefreshToken(newUser)
+	if err != nil {
+		return nil, fmt.Errorf("generate refresh token: %w", err)
+	}
 
 	return &port.AuthResponse{
-		Token: token,
-		User:  newUser,
+		Token:        token,
+		RefreshToken: refreshToken,
+		User:         newUser,
 	}, nil
 }
 
@@ -81,10 +86,56 @@ func (s *AuthService) Login(ctx context.Context, req port.LoginRequest) (*port.A
 	if err != nil {
 		return nil, fmt.Errorf("generate token: %w", err)
 	}
+	refreshToken, err := s.generateRefreshToken(user)
+	if err != nil {
+		return nil, fmt.Errorf("generate refresh token: %w", err)
+	}
 
 	return &port.AuthResponse{
-		Token: token,
-		User:  user,
+		Token:        token,
+		RefreshToken: refreshToken,
+		User:         user,
+	}, nil
+}
+
+func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*port.AuthResponse, error) {
+	if refreshToken == "" {
+		return nil, errors.New("refresh token required")
+	}
+	token, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(s.cfg.Jwt.RefreshSecret), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, errors.New("invalid or expired refresh token")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("invalid refresh token claims")
+	}
+	sub, ok := claims["sub"].(float64)
+	if !ok {
+		return nil, errors.New("invalid refresh token payload")
+	}
+	userID := int64(sub)
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil || user == nil {
+		return nil, errors.New("user not found")
+	}
+	accessToken, err := s.generateToken(user)
+	if err != nil {
+		return nil, fmt.Errorf("generate token: %w", err)
+	}
+	newRefreshToken, err := s.generateRefreshToken(user)
+	if err != nil {
+		return nil, fmt.Errorf("generate refresh token: %w", err)
+	}
+	return &port.AuthResponse{
+		Token:        accessToken,
+		RefreshToken: newRefreshToken,
+		User:         user,
 	}, nil
 }
 
@@ -104,4 +155,18 @@ func (s *AuthService) generateToken(user *models.User) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.cfg.Jwt.Secret))
+}
+
+func (s *AuthService) generateRefreshToken(user *models.User) (string, error) {
+	duration, err := time.ParseDuration(s.cfg.Jwt.RefreshExpiration)
+	if err != nil {
+		duration = 168 * time.Hour // 7 days default
+	}
+	claims := jwt.MapClaims{
+		"sub":  user.ID,
+		"uuid": user.UUID,
+		"exp":  time.Now().Add(duration).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(s.cfg.Jwt.RefreshSecret))
 }

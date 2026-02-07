@@ -72,3 +72,30 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	response.Success(w, http.StatusOK, "login successful", resp)
 }
+
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body", err.Error())
+		return
+	}
+	if req.RefreshToken == "" {
+		response.Error(w, http.StatusBadRequest, "refresh_token required", nil)
+		return
+	}
+
+	resp, err := h.svc.Refresh(r.Context(), req.RefreshToken)
+	if err != nil {
+		switch err.Error() {
+		case "refresh token required", "invalid or expired refresh token", "invalid refresh token claims", "invalid refresh token payload", "user not found":
+			response.Error(w, http.StatusUnauthorized, "refresh failed", err.Error())
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "internal server error", nil)
+		return
+	}
+
+	response.Success(w, http.StatusOK, "token refreshed", resp)
+}

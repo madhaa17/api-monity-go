@@ -11,6 +11,7 @@ import (
 	"monity/internal/app"
 	"monity/internal/config"
 	"monity/internal/database"
+	"monity/internal/pkg/cache"
 )
 
 func main() {
@@ -37,7 +38,21 @@ func main() {
 	}
 	defer sqlDB.Close()
 
-	application := app.New(ctx, cfg, db)
+	var c cache.Cache
+	if cfg.Redis.Enabled() {
+		rdb, err := database.NewRedis(ctx, &cfg.Redis)
+		if err != nil {
+			log.Fatalf("redis: %v", err)
+		}
+		defer rdb.Close()
+		c = cache.NewRedisCache(rdb)
+		log.Println("redis: connected, using Redis cache for prices")
+	} else {
+		c = cache.NewMemoryCache()
+		log.Println("redis: not configured, using in-memory cache for prices")
+	}
+
+	application := app.New(ctx, cfg, db, c)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

@@ -7,26 +7,23 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"monity/internal/config"
 	"monity/internal/core/port"
+	"monity/internal/pkg/cache"
 )
 
 type PriceService struct {
 	cfg        *config.PriceAPIConfig
 	httpClient *http.Client
-	cache      map[string]*cachedPrice
-	cacheMu    sync.RWMutex
+	cache      cache.Cache
 }
 
-type cachedPrice struct {
-	data      *port.PriceData
-	expiresAt time.Time
-}
-
-func NewPriceService(cfg *config.PriceAPIConfig) port.PriceService {
+func NewPriceService(cfg *config.PriceAPIConfig, c cache.Cache) port.PriceService {
+	if c == nil {
+		c = cache.NewMemoryCache()
+	}
 	transport := &http.Transport{
 		MaxIdleConns:        10,
 		IdleConnTimeout:     30 * time.Second,
@@ -40,7 +37,7 @@ func NewPriceService(cfg *config.PriceAPIConfig) port.PriceService {
 			Timeout:   15 * time.Second,
 			Transport: transport,
 		},
-		cache: make(map[string]*cachedPrice),
+		cache: c,
 	}
 }
 
@@ -73,7 +70,7 @@ func (s *PriceService) GetCryptoPriceWithCurrency(ctx context.Context, symbol st
 
 	cacheKey := fmt.Sprintf("crypto:%s:%s", symbol, currency)
 
-	if cached := s.getFromCache(cacheKey); cached != nil {
+	if cached := s.getFromCache(ctx, cacheKey); cached != nil {
 		return cached, nil
 	}
 
@@ -143,7 +140,7 @@ func (s *PriceService) GetCryptoPriceWithCurrency(ctx context.Context, symbol st
 		FetchedAt: time.Now(),
 	}
 
-	s.setCache(cacheKey, priceData)
+	s.setCache(ctx, cacheKey, priceData)
 
 	return priceData, nil
 }
@@ -162,7 +159,7 @@ func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol str
 
 	cacheKey := fmt.Sprintf("stock:%s:%s", symbol, currency)
 
-	if cached := s.getFromCache(cacheKey); cached != nil {
+	if cached := s.getFromCache(ctx, cacheKey); cached != nil {
 		return cached, nil
 	}
 
@@ -232,7 +229,7 @@ func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol str
 		FetchedAt: time.Now(),
 	}
 
-	s.setCache(cacheKey, priceData)
+	s.setCache(ctx, cacheKey, priceData)
 
 	return priceData, nil
 }
@@ -240,7 +237,7 @@ func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol str
 func (s *PriceService) getExchangeRate(ctx context.Context, fromCurrency, toCurrency string) (float64, error) {
 	cacheKey := fmt.Sprintf("fx:%s:%s", fromCurrency, toCurrency)
 
-	if cached := s.getFromCache(cacheKey); cached != nil {
+	if cached := s.getFromCache(ctx, cacheKey); cached != nil {
 		return cached.Price, nil
 	}
 
@@ -292,7 +289,7 @@ func (s *PriceService) getExchangeRate(ctx context.Context, fromCurrency, toCurr
 
 	rate := result.Chart.Result[0].Meta.RegularMarketPrice
 
-	s.setCache(cacheKey, &port.PriceData{
+	s.setCache(ctx, cacheKey, &port.PriceData{
 		Symbol:    fxSymbol,
 		Price:     rate,
 		Currency:  toCurrency,
@@ -303,30 +300,25 @@ func (s *PriceService) getExchangeRate(ctx context.Context, fromCurrency, toCurr
 	return rate, nil
 }
 
-func (s *PriceService) getFromCache(key string) *port.PriceData {
-	s.cacheMu.RLock()
-	defer s.cacheMu.RUnlock()
-
-	cached, ok := s.cache[key]
-	if !ok {
+func (s *PriceService) getFromCache(ctx context.Context, key string) *port.PriceData {
+	raw, err := s.cache.Get(ctx, key)
+	if err != nil {
 		return nil
 	}
-
-	if time.Now().After(cached.expiresAt) {
+	var data port.PriceData
+	if json.Unmarshal(raw, &data) != nil {
 		return nil
 	}
-
-	return cached.data
+	return &data
 }
 
-func (s *PriceService) setCache(key string, data *port.PriceData) {
-	s.cacheMu.Lock()
-	defer s.cacheMu.Unlock()
-
-	s.cache[key] = &cachedPrice{
-		data:      data,
-		expiresAt: time.Now().Add(time.Duration(s.cfg.CacheTTL) * time.Second),
+func (s *PriceService) setCache(ctx context.Context, key string, data *port.PriceData) {
+	ttl := time.Duration(s.cfg.CacheTTL) * time.Second
+	if ttl <= 0 {
+		ttl = 60 * time.Second
 	}
+	raw, _ := json.Marshal(data)
+	_ = s.cache.Set(ctx, key, raw, ttl)
 }
 
 func (s *PriceService) GetHistoricalCryptoPrice(ctx context.Context, symbol string, timestamp time.Time) (*port.PriceData, error) {

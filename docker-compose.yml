@@ -11,13 +11,19 @@ services:
     environment:
       APP_ENV: production
       APP_PORT: "8386"
-      DATABASE_HOST: ${DATABASE_HOST}
-      DATABASE_PORT: "5433"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
       DATABASE_USER: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DATABASE_NAME: ${DATABASE_NAME}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: "0"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - dokploy-network
@@ -41,6 +47,18 @@ services:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
+      retries: 5
+    networks:
+      - dokploy-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
       retries: 5
     networks:
       - dokploy-network

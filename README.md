@@ -6,6 +6,7 @@ Backend API for a personal finance tracker: assets (crypto, stocks), income, exp
 
 - **Go 1.24+** — stdlib `net/http`, no framework
 - **PostgreSQL** — via GORM
+- **Redis** — optional; used for price cache (crypto/stock) to reduce external API calls and improve response time
 - **JWT** — auth (Bearer token)
 - **Decimal** — `shopspring/decimal` for money/quantity values
 
@@ -99,5 +100,10 @@ Protected routes require header: `Authorization: Bearer <token>`.
 | `RATE_LIMIT_TTL`       | Rate limit window (seconds)   |
 | `RATE_LIMIT_LIMIT`     | Max requests per window per IP |
 | `CORS_ALLOWED_ORIGINS` | `*` or comma-separated origins |
+| `REDIS_HOST`          | Redis host for cache (empty = in-memory cache) |
+| `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB` | Redis connection |
+| `REDIS_TTL_PRICE`     | Price cache TTL in seconds |
+
+If `REDIS_HOST` is set, the app uses Redis for caching crypto/stock prices and FX rates, improving performance and sharing cache across instances. Otherwise, an in-memory cache is used (single instance only).
 
 See `.env.example` for the full list.

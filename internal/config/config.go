@@ -5,10 +5,30 @@ import "strconv"
 type Config struct {
 	App        AppConfig
 	Database   DatabaseConfig
+	Redis      RedisConfig
 	Jwt        JwtConfig
 	PriceAPI   PriceAPIConfig
 	RateLimit  RateLimitConfig
 	Security   SecurityConfig
+}
+
+type RedisConfig struct {
+	Host     string
+	Port     string
+	Username string // Redis 6+ ACL; leave empty for default user
+	Password string
+	DB       int
+}
+
+func (c *RedisConfig) Addr() string {
+	if c.Port == "" {
+		c.Port = "6379"
+	}
+	return c.Host + ":" + c.Port
+}
+
+func (c *RedisConfig) Enabled() bool {
+	return c.Host != ""
 }
 
 type RateLimitConfig struct {
@@ -43,8 +63,10 @@ type DatabaseConfig struct {
 }
 
 type JwtConfig struct {
-	Secret         string
-	ExpirationTime string
+	Secret            string
+	ExpirationTime    string
+	RefreshSecret     string
+	RefreshExpiration string
 }
 
 func Load() (*Config, error) {
@@ -55,6 +77,7 @@ func Load() (*Config, error) {
 	cacheTTL, _ := strconv.Atoi(getEnv("REDIS_TTL_PRICE", "60"))
 	rateLimitTTL, _ := strconv.Atoi(getEnv("RATE_LIMIT_TTL", "60"))
 	rateLimitLimit, _ := strconv.Atoi(getEnv("RATE_LIMIT_LIMIT", "100"))
+	redisDB, _ := strconv.Atoi(getEnv("REDIS_DB", "0"))
 
 	return &Config{
 		App: AppConfig{
@@ -70,9 +93,18 @@ func Load() (*Config, error) {
 			MaxOpenConnections: maxOpen,
 			MaxIdleConnections: maxIdle,
 		},
+		Redis: RedisConfig{
+			Host:     getEnv("REDIS_HOST", ""),
+			Port:     getEnv("REDIS_PORT", "6379"),
+			Username: getEnv("REDIS_USERNAME", ""),
+			Password: getEnv("REDIS_PASSWORD", ""),
+			DB:       redisDB,
+		},
 		Jwt: JwtConfig{
-			Secret:         getEnv("JWT_SECRET", "secret"),
-			ExpirationTime: getEnv("JWT_EXPIRATION_TIME", "1h"),
+			Secret:            getEnv("JWT_SECRET", "secret"),
+			ExpirationTime:    getEnv("JWT_EXPIRATION_TIME", "1h"),
+			RefreshSecret:     getEnv("JWT_REFRESH_SECRET", "refresh_secret"),
+			RefreshExpiration: getEnv("JWT_REFRESH_EXPIRATION_TIME", "168h"), // 7d default
 		},
 		PriceAPI: PriceAPIConfig{
 			CryptoAPI:    getEnv("CRYPTO_PRICE_API", "https://pro-api.coinmarketcap.com"),

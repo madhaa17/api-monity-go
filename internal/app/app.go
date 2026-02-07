@@ -11,6 +11,7 @@ import (
 	"monity/internal/app/routes"
 	"monity/internal/config"
 	"monity/internal/core/service"
+	"monity/internal/pkg/cache"
 
 	"gorm.io/gorm"
 )
@@ -21,7 +22,10 @@ type App struct {
 	srv *http.Server
 }
 
-func New(ctx context.Context, cfg *config.Config, db *gorm.DB) *App {
+func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *App {
+	if c == nil {
+		c = cache.NewMemoryCache()
+	}
 	userRepo := repository.NewUserRepository(db)
 	assetRepo := repository.NewAssetRepository(db)
 	expenseRepo := repository.NewExpenseRepository(db)
@@ -35,7 +39,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB) *App {
 	expenseSvc := service.NewExpenseService(expenseRepo)
 	incomeSvc := service.NewIncomeService(incomeRepo)
 	savingGoalSvc := service.NewSavingGoalService(savingGoalRepo)
-	priceSvc := service.NewPriceService(&cfg.PriceAPI)
+	priceSvc := service.NewPriceService(&cfg.PriceAPI, c)
 	assetPriceHistorySvc := service.NewAssetPriceHistoryService(assetPriceHistoryRepo, assetRepo, priceSvc)
 	insightSvc := service.NewInsightService(insightRepo)
 	portfolioSvc := service.NewPortfolioService(assetRepo, priceSvc)

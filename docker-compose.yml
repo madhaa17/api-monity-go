@@ -35,11 +35,13 @@ services:
       - "traefik.http.routers.monity-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.monity-api.loadbalancer.server.port=8386"
 
+  # Migrate always runs against the postgres container in this stack (same network).
+  # If you use external DB (DATABASE_HOST=your-server), run migrations manually against that DB.
   migrate:
     image: postgres:16-alpine
     environment:
-      PGHOST: ${DATABASE_HOST:-postgres}
-      PGPORT: ${DATABASE_PORT:-5432}
+      PGHOST: postgres
+      PGPORT: "5432"
       PGUSER: ${DATABASE_USER:-postgres}
       PGPASSWORD: ${DATABASE_PASSWORD:-postgres}
       PGDATABASE: ${DATABASE_NAME:-monity_db}
@@ -47,8 +49,8 @@ services:
       - ./migrations:/migrations:ro
     command: >
       sh -c "
-        echo 'Checking database connection...';
-        psql -tAc 'SELECT 1' || { echo 'Cannot connect to database. Check DATABASE_HOST/PORT and network.'; exit 2; };
+        echo 'Connecting to postgres container...';
+        psql -tAc 'SELECT 1' || { echo 'Migrate: cannot connect to postgres container.'; exit 2; };
         if psql -tAc \"SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='users'\" | grep -q 1; then
           echo 'Base schema exists, running 003 and 004...';
           for f in /migrations/003_*.sql /migrations/004_*.sql; do [ -f \"$$f\" ] && psql -v ON_ERROR_STOP=0 -f \"$$f\" || true; done;

@@ -1,12 +1,9 @@
-# External DB: set DATABASE_* in Dokploy Environment, or use .env (env_file).
-# Defaults below so container gets values even when compose runs without .env (e.g. .env not in deploy context).
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: .env
     environment:
       APP_ENV: production
       APP_PORT: "8386"

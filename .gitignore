@@ -33,4 +33,6 @@ go.work
 .DS_Store
 Thumbs.db
 
+# Local knowledge / docs (do not push to GitHub)
+knowledge/
 .knowledge/*

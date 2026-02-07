@@ -84,12 +84,19 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB) *App {
 		w.Write([]byte(`{"status":"ok","database":"connected"}`))
 	})
 
+	rateLimit := middleware.NewRateLimitMiddleware(&cfg.RateLimit)
+	chain := middleware.CORS(cfg.Security.CORSAllowedOrigins)(
+		middleware.SecurityHeaders(
+			rateLimit.Handler(mux),
+		),
+	)
+
 	app := &App{
 		cfg: cfg,
 		db:  db,
 		srv: &http.Server{
 			Addr:    ":" + cfg.App.Port,
-			Handler: mux,
+			Handler: chain,
 		},
 	}
 

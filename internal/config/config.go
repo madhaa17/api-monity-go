@@ -3,10 +3,21 @@ package config
 import "strconv"
 
 type Config struct {
-	App       AppConfig
-	Database  DatabaseConfig
-	Jwt       JwtConfig
-	PriceAPI  PriceAPIConfig
+	App        AppConfig
+	Database   DatabaseConfig
+	Jwt        JwtConfig
+	PriceAPI   PriceAPIConfig
+	RateLimit  RateLimitConfig
+	Security   SecurityConfig
+}
+
+type RateLimitConfig struct {
+	TTLSeconds int // time window in seconds
+	Limit      int // max requests per window per client
+}
+
+type SecurityConfig struct {
+	CORSAllowedOrigins string // comma-separated, e.g. "https://app.example.com,https://admin.example.com"
 }
 
 type PriceAPIConfig struct {
@@ -42,6 +53,8 @@ func Load() (*Config, error) {
 	maxOpen, _ := strconv.Atoi(getEnv("DATABASE_MAX_OPEN_CONNECTIONS", "10"))
 	maxIdle, _ := strconv.Atoi(getEnv("DATABASE_MAX_IDLE_CONNECTIONS", "10"))
 	cacheTTL, _ := strconv.Atoi(getEnv("REDIS_TTL_PRICE", "60"))
+	rateLimitTTL, _ := strconv.Atoi(getEnv("RATE_LIMIT_TTL", "60"))
+	rateLimitLimit, _ := strconv.Atoi(getEnv("RATE_LIMIT_LIMIT", "100"))
 
 	return &Config{
 		App: AppConfig{
@@ -66,6 +79,13 @@ func Load() (*Config, error) {
 			CryptoAPIKey: getEnv("CRYPTO_PRICE_API_KEY", ""),
 			StockAPI:     getEnv("STOCK_PRICE_API", "https://query1.finance.yahoo.com"),
 			CacheTTL:     cacheTTL,
+		},
+		RateLimit: RateLimitConfig{
+			TTLSeconds: rateLimitTTL,
+			Limit:      rateLimitLimit,
+		},
+		Security: SecurityConfig{
+			CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "*"),
 		},
 	}, nil
 }

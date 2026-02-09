@@ -4,42 +4,37 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+
     environment:
       APP_ENV: production
-      APP_PORT: "8386"
-      DATABASE_HOST: ${DATABASE_HOST:-15.235.174.28}
-      DATABASE_PORT: ${DATABASE_PORT:-5433}
-      DATABASE_USER: ${DATABASE_USER:-postgres}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
-      DATABASE_NAME: ${DATABASE_NAME:-monity_db}
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_USERNAME: ${REDIS_USERNAME:-}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      REDIS_DB: ${REDIS_DB:-0}
+      APP_PORT: ${APP_PORT}
+
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME}
+
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_USERNAME: ${REDIS_USERNAME}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      REDIS_TTL_PRICE: ${REDIS_TTL_PRICE}
+
     depends_on:
       redis:
         condition: service_healthy
+
     networks:
       - dokploy-network
+
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.monity-api.rule=Host(`api-assetmonitor.my.id`)"
       - "traefik.http.routers.monity-api.entrypoints=websecure"
       - "traefik.http.routers.monity-api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.monity-api.loadbalancer.server.port=8386"
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: redis-server --appendonly no
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    networks:
-      - dokploy-network
+      - "traefik.http.services.monity-api.loadbalancer.server.port=${APP_PORT}"
 
 networks:
   dokploy-network:

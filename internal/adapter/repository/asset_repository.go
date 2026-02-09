@@ -27,6 +27,18 @@ func (r *AssetRepo) Create(ctx context.Context, asset *models.Asset) error {
 	return nil
 }
 
+func (r *AssetRepo) GetByID(ctx context.Context, id int64) (*models.Asset, error) {
+	var asset models.Asset
+	result := r.db.WithContext(ctx).First(&asset, id)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get asset by id: %w", result.Error)
+	}
+	return &asset, nil
+}
+
 func (r *AssetRepo) GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Asset, error) {
 	var asset models.Asset
 	result := r.db.WithContext(ctx).Where("uuid = ? AND user_id = ?", uuid, userID).First(&asset)

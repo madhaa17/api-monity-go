@@ -7,6 +7,7 @@ import (
 
 type AssetRepository interface {
 	Create(ctx context.Context, asset *models.Asset) error
+	GetByID(ctx context.Context, id int64) (*models.Asset, error)
 	GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Asset, error)
 	ListByUserID(ctx context.Context, userID int64) ([]models.Asset, error)
 	Update(ctx context.Context, asset *models.Asset) error

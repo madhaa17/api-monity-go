@@ -23,15 +23,17 @@ type ExpenseService interface {
 }
 
 type CreateExpenseRequest struct {
-	Amount   float64                `json:"amount"`
-	Category models.ExpenseCategory `json:"category"`
-	Note     *string                `json:"note,omitempty"`
-	Date     time.Time              `json:"date"`
+	AssetUUID string                 `json:"assetUuid"`
+	Amount    float64                `json:"amount"`
+	Category  models.ExpenseCategory `json:"category"`
+	Note      *string                `json:"note,omitempty"`
+	Date      time.Time              `json:"date"`
 }
 
 type UpdateExpenseRequest struct {
-	Amount   *float64                `json:"amount,omitempty"`
-	Category *models.ExpenseCategory `json:"category,omitempty"`
-	Note     *string                 `json:"note,omitempty"`
-	Date     *time.Time              `json:"date,omitempty"`
+	AssetUUID *string                 `json:"assetUuid,omitempty"`
+	Amount    *float64                `json:"amount,omitempty"`
+	Category  *models.ExpenseCategory `json:"category,omitempty"`
+	Note      *string                 `json:"note,omitempty"`
+	Date      *time.Time              `json:"date,omitempty"`
 }

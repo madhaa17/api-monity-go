@@ -36,8 +36,8 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 
 	authSvc := service.NewAuthService(userRepo, cfg)
 	assetSvc := service.NewAssetService(assetRepo)
-	expenseSvc := service.NewExpenseService(expenseRepo)
-	incomeSvc := service.NewIncomeService(incomeRepo)
+	expenseSvc := service.NewExpenseService(expenseRepo, assetRepo)
+	incomeSvc := service.NewIncomeService(incomeRepo, assetRepo)
 	savingGoalSvc := service.NewSavingGoalService(savingGoalRepo)
 	priceSvc := service.NewPriceService(&cfg.PriceAPI, c)
 	assetPriceHistorySvc := service.NewAssetPriceHistoryService(assetPriceHistoryRepo, assetRepo, priceSvc)

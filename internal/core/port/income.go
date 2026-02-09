@@ -23,15 +23,17 @@ type IncomeService interface {
 }
 
 type CreateIncomeRequest struct {
-	Amount float64   `json:"amount"`
-	Source string    `json:"source"`
-	Note   *string   `json:"note,omitempty"`
-	Date   time.Time `json:"date"`
+	AssetUUID string    `json:"assetUuid"`
+	Amount    float64   `json:"amount"`
+	Source    string    `json:"source"`
+	Note      *string   `json:"note,omitempty"`
+	Date      time.Time `json:"date"`
 }
 
 type UpdateIncomeRequest struct {
-	Amount *float64   `json:"amount,omitempty"`
-	Source *string    `json:"source,omitempty"`
-	Note   *string    `json:"note,omitempty"`
-	Date   *time.Time `json:"date,omitempty"`
+	AssetUUID *string    `json:"assetUuid,omitempty"`
+	Amount    *float64   `json:"amount,omitempty"`
+	Source    *string    `json:"source,omitempty"`
+	Note      *string    `json:"note,omitempty"`
+	Date      *time.Time `json:"date,omitempty"`
 }

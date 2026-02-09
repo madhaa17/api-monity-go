@@ -42,7 +42,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 	priceSvc := service.NewPriceService(&cfg.PriceAPI, c)
 	assetPriceHistorySvc := service.NewAssetPriceHistoryService(assetPriceHistoryRepo, assetRepo, priceSvc)
 	insightSvc := service.NewInsightService(insightRepo)
-	portfolioSvc := service.NewPortfolioService(assetRepo, priceSvc)
+	portfolioSvc := service.NewPortfolioService(assetRepo, priceSvc, assetPriceHistoryRepo)
 	performanceSvc := service.NewPerformanceService(assetRepo, priceSvc)
 
 	authMiddleware := middleware.NewAuthMiddleware(cfg)

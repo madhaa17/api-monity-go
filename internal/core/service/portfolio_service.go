@@ -14,12 +14,14 @@ import (
 type PortfolioService struct {
 	assetRepo    port.AssetRepository
 	priceService port.PriceService
+	historyRepo  port.AssetPriceHistoryRepository
 }
 
-func NewPortfolioService(assetRepo port.AssetRepository, priceService port.PriceService) port.PortfolioService {
+func NewPortfolioService(assetRepo port.AssetRepository, priceService port.PriceService, historyRepo port.AssetPriceHistoryRepository) port.PortfolioService {
 	return &PortfolioService{
 		assetRepo:    assetRepo,
 		priceService: priceService,
+		historyRepo:  historyRepo,
 	}
 }
 
@@ -88,63 +90,68 @@ func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *model
 		assetCurrency = "USD"
 	}
 
-	// No symbol: use type-specific logic for CASH, LIVESTOCK, REAL_ESTATE
-	if asset.Symbol == nil || *asset.Symbol == "" {
-		switch asset.Type {
-		case models.AssetTypeCash:
-			// 1 unit of currency = 1 (e.g. 10_000_000 IDR = 10_000_000)
-			one := decimal.NewFromInt(1)
-			return &port.AssetValueResponse{
-				UUID:         asset.UUID,
-				Name:         asset.Name,
-				Type:         string(asset.Type),
-				Symbol:       s.getSymbolString(asset.Symbol),
-				Quantity:     asset.Quantity,
-				CurrentPrice: one,
-				Value:        asset.Quantity,
-				Currency:     assetCurrency,
-				PriceSource:  "cash_unit",
-			}, nil
-		case models.AssetTypeLivestock, models.AssetTypeRealEstate:
-			// Use purchase price per unit as manual "current" price
-			if asset.PurchasePrice.IsZero() {
-				return &port.AssetValueResponse{
-					UUID:         asset.UUID,
-					Name:         asset.Name,
-					Type:         string(asset.Type),
-					Symbol:       s.getSymbolString(asset.Symbol),
-					Quantity:     asset.Quantity,
-					CurrentPrice: decimal.Zero,
-					Value:        decimal.Zero,
-					Currency:     assetCurrency,
-					PriceSource:  "no_symbol",
-				}, nil
-			}
-			value := asset.Quantity.Mul(asset.PurchasePrice)
-			return &port.AssetValueResponse{
-				UUID:         asset.UUID,
-				Name:         asset.Name,
-				Type:         string(asset.Type),
-				Symbol:       s.getSymbolString(asset.Symbol),
-				Quantity:     asset.Quantity,
-				CurrentPrice: asset.PurchasePrice,
-				Value:        value,
-				Currency:     assetCurrency,
-				PriceSource:  "manual",
-			}, nil
-		default:
-			return &port.AssetValueResponse{
-				UUID:         asset.UUID,
-				Name:         asset.Name,
-				Type:         string(asset.Type),
-				Symbol:       s.getSymbolString(asset.Symbol),
-				Quantity:     asset.Quantity,
-				CurrentPrice: decimal.Zero,
-				Value:        decimal.Zero,
-				Currency:     assetCurrency,
-				PriceSource:  "no_symbol",
-			}, nil
+	// Non-digital assets: CASH, LIVESTOCK, REAL_ESTATE
+	// Priority: 1) latest price history (manual update)  2) purchase price  3) zero
+	switch asset.Type {
+	case models.AssetTypeCash:
+		// CASH: check price history first (user may update total cash amount via RecordPrice)
+		unitPrice := decimal.NewFromInt(1)
+		source := "cash_unit"
+		if latest, _ := s.historyRepo.GetLatestByAssetID(ctx, asset.ID); latest != nil {
+			unitPrice = latest.Price
+			source = "manual_update"
 		}
+		value := asset.Quantity.Mul(unitPrice)
+		return &port.AssetValueResponse{
+			UUID:         asset.UUID,
+			Name:         asset.Name,
+			Type:         string(asset.Type),
+			Symbol:       s.getSymbolString(asset.Symbol),
+			Quantity:     asset.Quantity,
+			CurrentPrice: unitPrice,
+			Value:        value,
+			Currency:     assetCurrency,
+			PriceSource:  source,
+		}, nil
+
+	case models.AssetTypeLivestock, models.AssetTypeRealEstate:
+		// Priority: latest price history → purchase price → zero
+		unitPrice := decimal.Zero
+		source := "no_price"
+		if latest, _ := s.historyRepo.GetLatestByAssetID(ctx, asset.ID); latest != nil {
+			unitPrice = latest.Price
+			source = "manual_update"
+		} else if !asset.PurchasePrice.IsZero() {
+			unitPrice = asset.PurchasePrice
+			source = "purchase_price"
+		}
+		value := asset.Quantity.Mul(unitPrice)
+		return &port.AssetValueResponse{
+			UUID:         asset.UUID,
+			Name:         asset.Name,
+			Type:         string(asset.Type),
+			Symbol:       s.getSymbolString(asset.Symbol),
+			Quantity:     asset.Quantity,
+			CurrentPrice: unitPrice,
+			Value:        value,
+			Currency:     assetCurrency,
+			PriceSource:  source,
+		}, nil
+	}
+
+	// Digital assets with no symbol: nothing to look up
+	if asset.Symbol == nil || *asset.Symbol == "" {
+		return &port.AssetValueResponse{
+			UUID:         asset.UUID,
+			Name:         asset.Name,
+			Type:         string(asset.Type),
+			Symbol:       s.getSymbolString(asset.Symbol),
+			Quantity:     asset.Quantity,
+			CurrentPrice: decimal.Zero,
+			Value:        decimal.Zero,
+			Currency:     assetCurrency,
+			PriceSource:  "no_symbol",
+		}, nil
 	}
 
 	var priceData *port.PriceData
@@ -170,6 +177,21 @@ func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *model
 	}
 
 	if err != nil {
+		// Fallback: use purchase price when external price is unavailable (e.g. API down, no key)
+		if !asset.PurchasePrice.IsZero() {
+			value := asset.Quantity.Mul(asset.PurchasePrice)
+			return &port.AssetValueResponse{
+				UUID:         asset.UUID,
+				Name:         asset.Name,
+				Type:         string(asset.Type),
+				Symbol:       *asset.Symbol,
+				Quantity:     asset.Quantity,
+				CurrentPrice: asset.PurchasePrice,
+				Value:        value,
+				Currency:     assetCurrency,
+				PriceSource:  "fallback",
+			}, nil
+		}
 		return nil, fmt.Errorf("get price for %s: %w", *asset.Symbol, err)
 	}
 

@@ -38,7 +38,7 @@ func (s *PerformanceService) GetAssetPerformance(ctx context.Context, userID int
 	if currency == "" {
 		currency = asset.PurchaseCurrency
 		if currency == "" {
-			currency = "USD"
+			currency = port.DefaultCurrency
 		}
 	}
 	
@@ -156,7 +156,7 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 	}
 	
 	if currency == "" {
-		currency = "USD"
+		currency = port.DefaultCurrency
 	}
 	
 	// Initialize aggregates

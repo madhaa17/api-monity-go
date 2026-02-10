@@ -8,6 +8,9 @@ import (
 const (
 	CurrencyUSD = "USD"
 	CurrencyIDR = "IDR"
+
+	// DefaultCurrency is IDR — all prices default to Indonesian Rupiah.
+	DefaultCurrency = CurrencyIDR
 )
 
 type PriceService interface {

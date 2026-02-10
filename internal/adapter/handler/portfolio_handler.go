@@ -26,7 +26,7 @@ func (h *PortfolioHandler) GetPortfolio(w http.ResponseWriter, r *http.Request) 
 
 	currency := r.URL.Query().Get("currency")
 	if currency == "" {
-		currency = port.CurrencyUSD
+		currency = port.DefaultCurrency
 	}
 	currency = strings.ToUpper(currency)
 
@@ -54,7 +54,7 @@ func (h *PortfolioHandler) GetAssetValue(w http.ResponseWriter, r *http.Request)
 
 	currency := r.URL.Query().Get("currency")
 	if currency == "" {
-		currency = port.CurrencyUSD
+		currency = port.DefaultCurrency
 	}
 	currency = strings.ToUpper(currency)
 

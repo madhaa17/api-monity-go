@@ -32,7 +32,7 @@ func (s *AssetService) CreateAsset(ctx context.Context, userID int64, req port.C
 	}
 	
 	// Default values
-	purchaseCurrency := "USD"
+	purchaseCurrency := "IDR"
 	if req.PurchaseCurrency != "" {
 		purchaseCurrency = req.PurchaseCurrency
 	}

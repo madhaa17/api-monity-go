@@ -25,7 +25,7 @@ func (h *PriceHandler) GetCryptoPrice(w http.ResponseWriter, r *http.Request) {
 
 	currency := r.URL.Query().Get("currency")
 	if currency == "" {
-		currency = port.CurrencyUSD
+		currency = port.DefaultCurrency
 	}
 	currency = strings.ToUpper(currency)
 
@@ -51,7 +51,7 @@ func (h *PriceHandler) GetStockPrice(w http.ResponseWriter, r *http.Request) {
 
 	currency := r.URL.Query().Get("currency")
 	if currency == "" {
-		currency = port.CurrencyUSD
+		currency = port.DefaultCurrency
 	}
 	currency = strings.ToUpper(currency)
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -13,6 +14,26 @@ import (
 	"monity/internal/core/port"
 	"monity/internal/pkg/cache"
 )
+
+// cryptoIDMap maps ticker symbols to CoinGecko IDs.
+// Add more entries as needed.
+var cryptoIDMap = map[string]string{
+	"BTC":  "bitcoin",
+	"ETH":  "ethereum",
+	"SOL":  "solana",
+	"USDT": "tether",
+	"BNB":  "binancecoin",
+	"XRP":  "ripple",
+	"ADA":  "cardano",
+	"DOGE": "dogecoin",
+	"AVAX": "avalanche-2",
+	"DOT":  "polkadot",
+	"MATIC": "matic-network",
+	"LINK": "chainlink",
+	"ATOM": "cosmos",
+	"UNI":  "uniswap",
+	"LTC":  "litecoin",
+}
 
 type PriceService struct {
 	cfg        *config.PriceAPIConfig
@@ -24,7 +45,12 @@ func NewPriceService(cfg *config.PriceAPIConfig, c cache.Cache) port.PriceServic
 	if c == nil {
 		c = cache.NewMemoryCache()
 	}
+	// Force IPv4 to avoid IPv6 connection issues with some API providers (e.g. CoinGecko/Cloudflare)
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return dialer.DialContext(ctx, "tcp4", addr)
+		},
 		MaxIdleConns:        10,
 		IdleConnTimeout:     30 * time.Second,
 		DisableCompression:  false,
@@ -42,7 +68,7 @@ func NewPriceService(cfg *config.PriceAPIConfig, c cache.Cache) port.PriceServic
 }
 
 func (s *PriceService) GetPrice(ctx context.Context, assetType string, symbol string) (*port.PriceData, error) {
-	return s.GetPriceWithCurrency(ctx, assetType, symbol, port.CurrencyUSD)
+	return s.GetPriceWithCurrency(ctx, assetType, symbol, port.DefaultCurrency)
 }
 
 func (s *PriceService) GetPriceWithCurrency(ctx context.Context, assetType string, symbol string, currency string) (*port.PriceData, error) {
@@ -56,33 +82,41 @@ func (s *PriceService) GetPriceWithCurrency(ctx context.Context, assetType strin
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Crypto — CoinGecko (free, no API key needed)
+// https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd
+// ---------------------------------------------------------------------------
+
 func (s *PriceService) GetCryptoPrice(ctx context.Context, symbol string) (*port.PriceData, error) {
-	return s.GetCryptoPriceWithCurrency(ctx, symbol, port.CurrencyUSD)
+	return s.GetCryptoPriceWithCurrency(ctx, symbol, port.DefaultCurrency)
 }
 
 func (s *PriceService) GetCryptoPriceWithCurrency(ctx context.Context, symbol string, currency string) (*port.PriceData, error) {
 	symbol = strings.ToUpper(symbol)
 	currency = strings.ToUpper(currency)
-
 	if currency == "" {
-		currency = port.CurrencyUSD
+		currency = port.DefaultCurrency
 	}
 
 	cacheKey := fmt.Sprintf("crypto:%s:%s", symbol, currency)
-
 	if cached := s.getFromCache(ctx, cacheKey); cached != nil {
 		return cached, nil
 	}
 
-	url := fmt.Sprintf("%s/v2/cryptocurrency/quotes/latest?symbol=%s&convert=%s", s.cfg.CryptoAPI, symbol, currency)
+	// Map ticker to CoinGecko id (e.g. SOL -> solana)
+	coinID, ok := cryptoIDMap[symbol]
+	if !ok {
+		return nil, fmt.Errorf("unsupported crypto symbol: %s (add to cryptoIDMap)", symbol)
+	}
+
+	vsCurrency := strings.ToLower(currency)
+	url := fmt.Sprintf("https://api.coingecko.com/api/v3/simple/price?ids=%s&vs_currencies=%s", coinID, vsCurrency)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-CMC_PRO_API_KEY", s.cfg.CryptoAPIKey)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -90,80 +124,77 @@ func (s *PriceService) GetCryptoPriceWithCurrency(ctx context.Context, symbol st
 	}
 	defer resp.Body.Close()
 
-	if err := s.handleCMCError(resp); err != nil {
-		return nil, err
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("coingecko API returned status %d", resp.StatusCode)
 	}
 
-	var result struct {
-		Status struct {
-			ErrorCode    int    `json:"error_code"`
-			ErrorMessage string `json:"error_message"`
-		} `json:"status"`
-		Data map[string][]struct {
-			ID     int    `json:"id"`
-			Name   string `json:"name"`
-			Symbol string `json:"symbol"`
-			Quote  map[string]struct {
-				Price            float64 `json:"price"`
-				PercentChange24h float64 `json:"percent_change_24h"`
-				MarketCap        float64 `json:"market_cap"`
-				Volume24h        float64 `json:"volume_24h"`
-			} `json:"quote"`
-		} `json:"data"`
-	}
-
+	// Response: {"solana":{"usd":86.59}}
+	var result map[string]map[string]float64
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	if result.Status.ErrorCode != 0 {
-		return nil, fmt.Errorf("CoinMarketCap API error: %s", result.Status.ErrorMessage)
-	}
-
-	coins, ok := result.Data[symbol]
-	if !ok || len(coins) == 0 {
+	coinData, ok := result[coinID]
+	if !ok {
 		return nil, fmt.Errorf("price not found for %s", symbol)
 	}
 
-	coinData := coins[0]
-
-	quote, ok := coinData.Quote[currency]
+	price, ok := coinData[vsCurrency]
 	if !ok {
 		return nil, fmt.Errorf("price in %s not found for %s", currency, symbol)
 	}
 
 	priceData := &port.PriceData{
 		Symbol:    symbol,
-		Price:     quote.Price,
+		Price:     price,
 		Currency:  currency,
-		Source:    "coinmarketcap",
+		Source:    "coingecko",
 		FetchedAt: time.Now(),
 	}
 
 	s.setCache(ctx, cacheKey, priceData)
-
 	return priceData, nil
 }
 
+// ---------------------------------------------------------------------------
+// Stock — Yahoo Finance (free, no API key needed)
+// https://query1.finance.yahoo.com/v8/finance/chart/BBRI.JK?interval=1d&range=1d
+// IDX stocks need .JK suffix (e.g. BBRI -> BBRI.JK, BBCA -> BBCA.JK)
+// ---------------------------------------------------------------------------
+
+// idxStocks lists common IDX (Jakarta) stock tickers that need .JK suffix.
+var idxStocks = map[string]bool{
+	"BBRI": true, "BBCA": true, "BMRI": true, "BBNI": true, "BRIS": true,
+	"TLKM": true, "ASII": true, "UNVR": true, "HMSP": true, "GGRM": true,
+	"ICBP": true, "INDF": true, "KLBF": true, "PGAS": true, "SMGR": true,
+	"ANTM": true, "PTBA": true, "ADRO": true, "ITMG": true, "INCO": true,
+	"EXCL": true, "ISAT": true, "TOWR": true, "MNCN": true, "SIDO": true,
+	"EMTK": true, "BUKA": true, "GOTO": true, "ACES": true, "MDKA": true,
+}
+
 func (s *PriceService) GetStockPrice(ctx context.Context, symbol string) (*port.PriceData, error) {
-	return s.GetStockPriceWithCurrency(ctx, symbol, port.CurrencyUSD)
+	return s.GetStockPriceWithCurrency(ctx, symbol, port.DefaultCurrency)
 }
 
 func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol string, currency string) (*port.PriceData, error) {
 	symbol = strings.ToUpper(symbol)
 	currency = strings.ToUpper(currency)
-
 	if currency == "" {
-		currency = port.CurrencyUSD
+		currency = port.DefaultCurrency
 	}
 
 	cacheKey := fmt.Sprintf("stock:%s:%s", symbol, currency)
-
 	if cached := s.getFromCache(ctx, cacheKey); cached != nil {
 		return cached, nil
 	}
 
-	url := fmt.Sprintf("%s/v8/finance/chart/%s?interval=1d&range=1d", s.cfg.StockAPI, symbol)
+	// Auto-append .JK for known IDX stocks
+	yahooSymbol := symbol
+	if idxStocks[symbol] {
+		yahooSymbol = symbol + ".JK"
+	}
+
+	url := fmt.Sprintf("%s/v8/finance/chart/%s?interval=1d&range=1d", s.cfg.StockAPI, yahooSymbol)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -179,7 +210,7 @@ func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol str
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("stock API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("stock API returned status %d for %s", resp.StatusCode, yahooSymbol)
 	}
 
 	var result struct {
@@ -206,17 +237,25 @@ func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol str
 	}
 
 	if len(result.Chart.Result) == 0 {
-		return nil, fmt.Errorf("no price data found for %s", symbol)
+		return nil, fmt.Errorf("no price data found for %s", yahooSymbol)
 	}
 
 	meta := result.Chart.Result[0].Meta
 	price := meta.RegularMarketPrice
 	sourceCurrency := strings.ToUpper(meta.Currency)
 
+	// Convert currency if needed (e.g. BBRI returns IDR, but user wants USD)
 	if currency != sourceCurrency {
 		exchangeRate, err := s.getExchangeRate(ctx, sourceCurrency, currency)
 		if err != nil {
-			return nil, fmt.Errorf("get exchange rate: %w", err)
+			// If conversion fails, return in source currency
+			return &port.PriceData{
+				Symbol:    symbol,
+				Price:     price,
+				Currency:  sourceCurrency,
+				Source:    "yahoo",
+				FetchedAt: time.Now(),
+			}, nil
 		}
 		price = price * exchangeRate
 	}
@@ -230,9 +269,12 @@ func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol str
 	}
 
 	s.setCache(ctx, cacheKey, priceData)
-
 	return priceData, nil
 }
+
+// ---------------------------------------------------------------------------
+// Exchange rate — Yahoo Finance (e.g. USDIDR=X)
+// ---------------------------------------------------------------------------
 
 func (s *PriceService) getExchangeRate(ctx context.Context, fromCurrency, toCurrency string) (float64, error) {
 	cacheKey := fmt.Sprintf("fx:%s:%s", fromCurrency, toCurrency)
@@ -300,6 +342,130 @@ func (s *PriceService) getExchangeRate(ctx context.Context, fromCurrency, toCurr
 	return rate, nil
 }
 
+// ---------------------------------------------------------------------------
+// Historical — CoinGecko (simplified, no CMC key needed)
+// ---------------------------------------------------------------------------
+
+func (s *PriceService) GetHistoricalCryptoPrice(ctx context.Context, symbol string, timestamp time.Time) (*port.PriceData, error) {
+	symbol = strings.ToUpper(symbol)
+
+	coinID, ok := cryptoIDMap[symbol]
+	if !ok {
+		return nil, fmt.Errorf("unsupported crypto symbol: %s", symbol)
+	}
+
+	// CoinGecko history endpoint: /coins/{id}/history?date=dd-mm-yyyy
+	dateStr := timestamp.UTC().Format("02-01-2006")
+	url := fmt.Sprintf("https://api.coingecko.com/api/v3/coins/%s/history?date=%s&localization=false", coinID, dateStr)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch historical crypto price: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("coingecko history API returned status %d", resp.StatusCode)
+	}
+
+	var result struct {
+		MarketData struct {
+			CurrentPrice map[string]float64 `json:"current_price"`
+		} `json:"market_data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	price, ok := result.MarketData.CurrentPrice["idr"]
+	if !ok {
+		return nil, fmt.Errorf("historical price not found for %s at %s", symbol, dateStr)
+	}
+
+	return &port.PriceData{
+		Symbol:    symbol,
+		Price:     price,
+		Currency:  port.DefaultCurrency,
+		Source:    "coingecko",
+		FetchedAt: timestamp,
+	}, nil
+}
+
+func (s *PriceService) GetHistoricalCryptoOHLCV(ctx context.Context, symbol string, timeStart, timeEnd time.Time, interval string) ([]port.OHLCVData, error) {
+	symbol = strings.ToUpper(symbol)
+
+	coinID, ok := cryptoIDMap[symbol]
+	if !ok {
+		return nil, fmt.Errorf("unsupported crypto symbol: %s", symbol)
+	}
+
+	// CoinGecko OHLC endpoint: /coins/{id}/ohlc?vs_currency=usd&days=30
+	days := int(timeEnd.Sub(timeStart).Hours()/24) + 1
+	if days < 1 {
+		days = 1
+	}
+	if days > 365 {
+		days = 365
+	}
+
+	url := fmt.Sprintf("https://api.coingecko.com/api/v3/coins/%s/ohlc?vs_currency=idr&days=%d", coinID, days)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch historical OHLCV: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("coingecko OHLC API returned status %d", resp.StatusCode)
+	}
+
+	// Response: [[timestamp, open, high, low, close], ...]
+	var rawData [][]float64
+	if err := json.NewDecoder(resp.Body).Decode(&rawData); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	ohlcvData := make([]port.OHLCVData, 0, len(rawData))
+	for _, candle := range rawData {
+		if len(candle) < 5 {
+			continue
+		}
+		ts := time.UnixMilli(int64(candle[0]))
+		ohlcvData = append(ohlcvData, port.OHLCVData{
+			Symbol:    symbol,
+			TimeOpen:  ts,
+			TimeClose: ts,
+			Open:      candle[1],
+			High:      candle[2],
+			Low:       candle[3],
+			Close:     candle[4],
+			Volume:    0, // CoinGecko OHLC doesn't include volume
+			Currency:  port.DefaultCurrency,
+			Source:    "coingecko",
+		})
+	}
+
+	return ohlcvData, nil
+}
+
+// ---------------------------------------------------------------------------
+// Cache helpers
+// ---------------------------------------------------------------------------
+
 func (s *PriceService) getFromCache(ctx context.Context, key string) *port.PriceData {
 	raw, err := s.cache.Get(ctx, key)
 	if err != nil {
@@ -320,195 +486,3 @@ func (s *PriceService) setCache(ctx context.Context, key string, data *port.Pric
 	raw, _ := json.Marshal(data)
 	_ = s.cache.Set(ctx, key, raw, ttl)
 }
-
-func (s *PriceService) GetHistoricalCryptoPrice(ctx context.Context, symbol string, timestamp time.Time) (*port.PriceData, error) {
-	symbol = strings.ToUpper(symbol)
-	timeStr := timestamp.UTC().Format(time.RFC3339)
-
-	url := fmt.Sprintf("%s/v2/cryptocurrency/quotes/historical?symbol=%s&time_start=%s&time_end=%s&count=1&interval=hourly&convert=USD",
-		s.cfg.CryptoAPI, symbol, timeStr, timeStr)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-CMC_PRO_API_KEY", s.cfg.CryptoAPIKey)
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch historical crypto price: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if err := s.handleCMCError(resp); err != nil {
-		return nil, err
-	}
-
-	var result struct {
-		Status struct {
-			ErrorCode    int    `json:"error_code"`
-			ErrorMessage string `json:"error_message"`
-		} `json:"status"`
-		Data map[string][]struct {
-			ID     int    `json:"id"`
-			Name   string `json:"name"`
-			Symbol string `json:"symbol"`
-			Quotes []struct {
-				Timestamp time.Time `json:"timestamp"`
-				Quote     struct {
-					USD struct {
-						Price     float64 `json:"price"`
-						Volume24h float64 `json:"volume_24h"`
-						MarketCap float64 `json:"market_cap"`
-					} `json:"USD"`
-				} `json:"quote"`
-			} `json:"quotes"`
-		} `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	if result.Status.ErrorCode != 0 {
-		return nil, fmt.Errorf("CoinMarketCap API error: %s", result.Status.ErrorMessage)
-	}
-
-	coins, ok := result.Data[symbol]
-	if !ok || len(coins) == 0 {
-		return nil, fmt.Errorf("historical price not found for %s", symbol)
-	}
-
-	coinData := coins[0]
-	if len(coinData.Quotes) == 0 {
-		return nil, fmt.Errorf("no historical quotes found for %s at %s", symbol, timeStr)
-	}
-
-	quote := coinData.Quotes[0]
-
-	return &port.PriceData{
-		Symbol:    symbol,
-		Price:     quote.Quote.USD.Price,
-		Currency:  "USD",
-		Source:    "coinmarketcap",
-		FetchedAt: quote.Timestamp,
-	}, nil
-}
-
-func (s *PriceService) GetHistoricalCryptoOHLCV(ctx context.Context, symbol string, timeStart, timeEnd time.Time, interval string) ([]port.OHLCVData, error) {
-	symbol = strings.ToUpper(symbol)
-
-	if interval == "" {
-		interval = "daily"
-	}
-
-	timeStartStr := timeStart.UTC().Format(time.RFC3339)
-	timeEndStr := timeEnd.UTC().Format(time.RFC3339)
-
-	url := fmt.Sprintf("%s/v2/cryptocurrency/ohlcv/historical?symbol=%s&time_start=%s&time_end=%s&time_period=%s&convert=USD",
-		s.cfg.CryptoAPI, symbol, timeStartStr, timeEndStr, interval)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-CMC_PRO_API_KEY", s.cfg.CryptoAPIKey)
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch historical OHLCV: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if err := s.handleCMCError(resp); err != nil {
-		return nil, err
-	}
-
-	var result struct {
-		Status struct {
-			ErrorCode    int    `json:"error_code"`
-			ErrorMessage string `json:"error_message"`
-		} `json:"status"`
-		Data map[string][]struct {
-			ID     int    `json:"id"`
-			Name   string `json:"name"`
-			Symbol string `json:"symbol"`
-			Quotes []struct {
-				TimeOpen  time.Time `json:"time_open"`
-				TimeClose time.Time `json:"time_close"`
-				TimeHigh  time.Time `json:"time_high"`
-				TimeLow   time.Time `json:"time_low"`
-				Quote     struct {
-					USD struct {
-						Open      float64 `json:"open"`
-						High      float64 `json:"high"`
-						Low       float64 `json:"low"`
-						Close     float64 `json:"close"`
-						Volume    float64 `json:"volume"`
-						MarketCap float64 `json:"market_cap"`
-					} `json:"USD"`
-				} `json:"quote"`
-			} `json:"quotes"`
-		} `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	if result.Status.ErrorCode != 0 {
-		return nil, fmt.Errorf("CoinMarketCap API error: %s", result.Status.ErrorMessage)
-	}
-
-	coins, ok := result.Data[symbol]
-	if !ok || len(coins) == 0 {
-		return nil, fmt.Errorf("historical OHLCV not found for %s", symbol)
-	}
-
-	coinData := coins[0]
-	ohlcvData := make([]port.OHLCVData, 0, len(coinData.Quotes))
-
-	for _, quote := range coinData.Quotes {
-		ohlcvData = append(ohlcvData, port.OHLCVData{
-			Symbol:    symbol,
-			TimeOpen:  quote.TimeOpen,
-			TimeClose: quote.TimeClose,
-			Open:      quote.Quote.USD.Open,
-			High:      quote.Quote.USD.High,
-			Low:       quote.Quote.USD.Low,
-			Close:     quote.Quote.USD.Close,
-			Volume:    quote.Quote.USD.Volume,
-			MarketCap: quote.Quote.USD.MarketCap,
-			Currency:  "USD",
-			Source:    "coinmarketcap",
-		})
-	}
-
-	return ohlcvData, nil
-}
-
-func (s *PriceService) handleCMCError(resp *http.Response) error {
-	switch resp.StatusCode {
-	case http.StatusOK:
-		return nil
-	case http.StatusBadRequest:
-		return fmt.Errorf("bad request: invalid parameters")
-	case http.StatusUnauthorized:
-		return fmt.Errorf("unauthorized: invalid or missing API key")
-	case http.StatusPaymentRequired:
-		return fmt.Errorf("payment required: API subscription issue")
-	case http.StatusForbidden:
-		return fmt.Errorf("forbidden: API plan doesn't support this endpoint")
-	case http.StatusTooManyRequests:
-		return fmt.Errorf("rate limited, please try again later")
-	case http.StatusInternalServerError:
-		return fmt.Errorf("internal server error")
-	default:
-		return fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-}
-

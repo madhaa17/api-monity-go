@@ -27,7 +27,7 @@ func NewPortfolioService(assetRepo port.AssetRepository, priceService port.Price
 
 func (s *PortfolioService) GetPortfolio(ctx context.Context, userID int64, currency string) (*port.PortfolioResponse, error) {
 	if currency == "" {
-		currency = port.CurrencyUSD
+		currency = port.DefaultCurrency
 	}
 
 	assets, err := s.assetRepo.ListByUserID(ctx, userID)
@@ -70,7 +70,7 @@ func (s *PortfolioService) GetPortfolio(ctx context.Context, userID int64, curre
 
 func (s *PortfolioService) GetAssetValue(ctx context.Context, userID int64, assetUUID string, currency string) (*port.AssetValueResponse, error) {
 	if currency == "" {
-		currency = port.CurrencyUSD
+		currency = port.DefaultCurrency
 	}
 
 	asset, err := s.assetRepo.GetByUUID(ctx, assetUUID, userID)
@@ -87,7 +87,7 @@ func (s *PortfolioService) GetAssetValue(ctx context.Context, userID int64, asse
 func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *models.Asset, currency string) (*port.AssetValueResponse, error) {
 	assetCurrency := asset.PurchaseCurrency
 	if assetCurrency == "" {
-		assetCurrency = "USD"
+		assetCurrency = port.DefaultCurrency
 	}
 
 	// Non-digital assets: CASH, LIVESTOCK, REAL_ESTATE

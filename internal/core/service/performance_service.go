@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"monity/internal/core/port"
@@ -58,14 +59,16 @@ func (s *PerformanceService) GetAssetPerformance(ctx context.Context, userID int
 		
 		if err == nil && priceData != nil {
 			currentPrice = decimal.NewFromFloat(priceData.Price)
-			currentValue = asset.Quantity.Mul(currentPrice)
+			effectiveQty := s.effectiveQuantity(asset)
+			currentValue = effectiveQty.Mul(currentPrice)
 		}
 	}
 	
 	// If no current price available, use purchase price
 	if currentPrice.IsZero() {
 		currentPrice = asset.PurchasePrice
-		currentValue = asset.Quantity.Mul(currentPrice)
+		effectiveQty := s.effectiveQuantity(asset)
+		currentValue = effectiveQty.Mul(currentPrice)
 	}
 	
 	// Calculate performance metrics
@@ -198,7 +201,8 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 			}
 		}
 		
-		currentValue := asset.Quantity.Mul(currentPrice)
+		effectiveQty := s.effectiveQuantity(&asset)
+		currentValue := effectiveQty.Mul(currentPrice)
 		profitLoss := currentValue.Sub(asset.TotalCost)
 		profitLossPercent := decimal.Zero
 		if !asset.TotalCost.IsZero() {
@@ -337,6 +341,15 @@ func (s *PerformanceService) generateRecommendation(asset *models.Asset, current
 	}
 	
 	return "Monitor regularly and stick to your investment plan."
+}
+
+// effectiveQuantity returns the actual number of units for value calculation.
+// For IDX stocks, quantity is in lots (1 lot = 100 shares), so we multiply by 100.
+func (s *PerformanceService) effectiveQuantity(asset *models.Asset) decimal.Decimal {
+	if asset.Type == models.AssetTypeStock && asset.Symbol != nil && IsIDXStock(strings.ToUpper(*asset.Symbol)) {
+		return asset.Quantity.Mul(decimal.NewFromInt(IDXLotSize))
+	}
+	return asset.Quantity
 }
 
 func (s *PerformanceService) getSymbolString(symbol *string) string {

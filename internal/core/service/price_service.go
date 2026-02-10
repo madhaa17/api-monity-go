@@ -162,14 +162,23 @@ func (s *PriceService) GetCryptoPriceWithCurrency(ctx context.Context, symbol st
 // IDX stocks need .JK suffix (e.g. BBRI -> BBRI.JK, BBCA -> BBCA.JK)
 // ---------------------------------------------------------------------------
 
-// idxStocks lists common IDX (Jakarta) stock tickers that need .JK suffix.
-var idxStocks = map[string]bool{
+// IDXStocks lists common IDX (Jakarta) stock tickers that need .JK suffix.
+// Exported so other services (portfolio) can check lot-based calculation.
+var IDXStocks = map[string]bool{
 	"BBRI": true, "BBCA": true, "BMRI": true, "BBNI": true, "BRIS": true,
 	"TLKM": true, "ASII": true, "UNVR": true, "HMSP": true, "GGRM": true,
 	"ICBP": true, "INDF": true, "KLBF": true, "PGAS": true, "SMGR": true,
 	"ANTM": true, "PTBA": true, "ADRO": true, "ITMG": true, "INCO": true,
 	"EXCL": true, "ISAT": true, "TOWR": true, "MNCN": true, "SIDO": true,
 	"EMTK": true, "BUKA": true, "GOTO": true, "ACES": true, "MDKA": true,
+}
+
+// IDXLotSize is the number of shares per lot in the Indonesian stock exchange.
+const IDXLotSize = 100
+
+// IsIDXStock checks if a ticker is a known IDX stock.
+func IsIDXStock(symbol string) bool {
+	return IDXStocks[strings.ToUpper(symbol)]
 }
 
 func (s *PriceService) GetStockPrice(ctx context.Context, symbol string) (*port.PriceData, error) {
@@ -190,7 +199,7 @@ func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol str
 
 	// Auto-append .JK for known IDX stocks
 	yahooSymbol := symbol
-	if idxStocks[symbol] {
+	if IDXStocks[symbol] {
 		yahooSymbol = symbol + ".JK"
 	}
 

@@ -21,28 +21,28 @@ func NewSavingGoalHandler(svc port.SavingGoalService) *SavingGoalHandler {
 func (h *SavingGoalHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
 	var req port.CreateSavingGoalRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid request body", err.Error())
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid request body", err.Error())
 		return
 	}
 
 	if strings.TrimSpace(req.Title) == "" || req.TargetAmount <= 0 {
-		response.Error(w, http.StatusBadRequest, "missing required fields", nil)
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "missing required fields", nil)
 		return
 	}
 
 	goal, err := h.svc.CreateSavingGoal(r.Context(), userID, req)
 	if err != nil {
 		if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "negative") {
-			response.Error(w, http.StatusBadRequest, err.Error(), nil)
+			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "failed to create saving goal", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to create saving goal", err.Error())
 		return
 	}
 
@@ -52,13 +52,13 @@ func (h *SavingGoalHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *SavingGoalHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
 	goals, err := h.svc.ListSavingGoals(r.Context(), userID)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "failed to list saving goals", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to list saving goals", err.Error())
 		return
 	}
 
@@ -68,23 +68,23 @@ func (h *SavingGoalHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *SavingGoalHandler) Get(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
 	uuid := r.PathValue("uuid")
 	if strings.TrimSpace(uuid) == "" {
-		response.Error(w, http.StatusBadRequest, "invalid saving goal uuid", nil)
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid saving goal uuid", nil)
 		return
 	}
 
 	goal, err := h.svc.GetSavingGoal(r.Context(), userID, uuid)
 	if err != nil {
 		if err.Error() == "saving goal not found" {
-			response.Error(w, http.StatusNotFound, "saving goal not found", nil)
+			response.ErrorWithLog(w, r, http.StatusNotFound, "saving goal not found", nil)
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "failed to get saving goal", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to get saving goal", err.Error())
 		return
 	}
 
@@ -94,33 +94,33 @@ func (h *SavingGoalHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *SavingGoalHandler) Update(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
 	uuid := r.PathValue("uuid")
 	if strings.TrimSpace(uuid) == "" {
-		response.Error(w, http.StatusBadRequest, "invalid saving goal uuid", nil)
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid saving goal uuid", nil)
 		return
 	}
 
 	var req port.UpdateSavingGoalRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid request body", err.Error())
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid request body", err.Error())
 		return
 	}
 
 	goal, err := h.svc.UpdateSavingGoal(r.Context(), userID, uuid, req)
 	if err != nil {
 		if err.Error() == "saving goal not found" {
-			response.Error(w, http.StatusNotFound, "saving goal not found", nil)
+			response.ErrorWithLog(w, r, http.StatusNotFound, "saving goal not found", nil)
 			return
 		}
 		if strings.Contains(err.Error(), "empty") || strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "negative") {
-			response.Error(w, http.StatusBadRequest, err.Error(), nil)
+			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "failed to update saving goal", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to update saving goal", err.Error())
 		return
 	}
 
@@ -130,22 +130,22 @@ func (h *SavingGoalHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *SavingGoalHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
 	uuid := r.PathValue("uuid")
 	if strings.TrimSpace(uuid) == "" {
-		response.Error(w, http.StatusBadRequest, "invalid saving goal uuid", nil)
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid saving goal uuid", nil)
 		return
 	}
 
 	if err := h.svc.DeleteSavingGoal(r.Context(), userID, uuid); err != nil {
 		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not owned") {
-			response.Error(w, http.StatusNotFound, "saving goal not found", nil)
+			response.ErrorWithLog(w, r, http.StatusNotFound, "saving goal not found", nil)
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "failed to delete saving goal", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to delete saving goal", err.Error())
 		return
 	}
 

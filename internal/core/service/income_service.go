@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"monity/internal/core/port"
@@ -55,10 +56,12 @@ func (s *IncomeService) CreateIncome(ctx context.Context, userID int64, req port
 	amount := decimal.NewFromFloat(req.Amount)
 
 	// Add to CASH asset
+	oldQty := asset.Quantity
 	asset.Quantity = asset.Quantity.Add(amount)
 	if err := s.assetRepo.Update(ctx, asset); err != nil {
 		return nil, fmt.Errorf("update asset balance: %w", err)
 	}
+	slog.Info("balance_updated", "asset_uuid", asset.UUID, "old", oldQty.String(), "new", asset.Quantity.String())
 
 	income := &models.Income{
 		UserID:  userID,
@@ -72,6 +75,7 @@ func (s *IncomeService) CreateIncome(ctx context.Context, userID int64, req port
 	if err := s.repo.Create(ctx, income); err != nil {
 		return nil, fmt.Errorf("create income: %w", err)
 	}
+	slog.Info("income_created", "user_id", userID, "amount", req.Amount, "source", req.Source, "asset_uuid", req.AssetUUID)
 	return income, nil
 }
 
@@ -206,5 +210,6 @@ func (s *IncomeService) DeleteIncome(ctx context.Context, userID int64, uuid str
 	if err := s.repo.Delete(ctx, uuid, userID); err != nil {
 		return fmt.Errorf("delete income: %w", err)
 	}
+	slog.Info("income_deleted", "user_id", userID, "uuid", uuid, "amount", income.Amount.String())
 	return nil
 }

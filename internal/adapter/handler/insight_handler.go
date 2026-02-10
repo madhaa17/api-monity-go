@@ -20,7 +20,7 @@ func NewInsightHandler(svc port.InsightService) *InsightHandler {
 func (h *InsightHandler) GetCashflow(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
@@ -30,10 +30,10 @@ func (h *InsightHandler) GetCashflow(w http.ResponseWriter, r *http.Request) {
 	summary, err := h.svc.GetCashflowSummary(r.Context(), userID, month)
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid month format") {
-			response.Error(w, http.StatusBadRequest, err.Error(), nil)
+			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "failed to get cashflow summary", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to get cashflow summary", err.Error())
 		return
 	}
 
@@ -43,13 +43,13 @@ func (h *InsightHandler) GetCashflow(w http.ResponseWriter, r *http.Request) {
 func (h *InsightHandler) GetOverview(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
 	overview, err := h.svc.GetFinancialOverview(r.Context(), userID)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "failed to get financial overview", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to get financial overview", err.Error())
 		return
 	}
 

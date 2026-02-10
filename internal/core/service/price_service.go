@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -100,8 +101,10 @@ func (s *PriceService) GetCryptoPriceWithCurrency(ctx context.Context, symbol st
 
 	cacheKey := fmt.Sprintf("crypto:%s:%s", symbol, currency)
 	if cached := s.getFromCache(ctx, cacheKey); cached != nil {
+		slog.Debug("cache_hit", "key", cacheKey)
 		return cached, nil
 	}
+	slog.Debug("cache_miss", "key", cacheKey)
 
 	// Map ticker to CoinGecko id (e.g. SOL -> solana)
 	coinID, ok := cryptoIDMap[symbol]
@@ -120,11 +123,13 @@ func (s *PriceService) GetCryptoPriceWithCurrency(ctx context.Context, symbol st
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		slog.Warn("price_api_error", "symbol", symbol, "source", "coingecko", "error", err)
 		return nil, fmt.Errorf("fetch crypto price: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		slog.Warn("price_api_error", "symbol", symbol, "source", "coingecko", "status", resp.StatusCode)
 		return nil, fmt.Errorf("coingecko API returned status %d", resp.StatusCode)
 	}
 
@@ -153,6 +158,7 @@ func (s *PriceService) GetCryptoPriceWithCurrency(ctx context.Context, symbol st
 	}
 
 	s.setCache(ctx, cacheKey, priceData)
+	slog.Info("price_fetched", "symbol", symbol, "price", price, "source", "coingecko")
 	return priceData, nil
 }
 
@@ -194,8 +200,10 @@ func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol str
 
 	cacheKey := fmt.Sprintf("stock:%s:%s", symbol, currency)
 	if cached := s.getFromCache(ctx, cacheKey); cached != nil {
+		slog.Debug("cache_hit", "key", cacheKey)
 		return cached, nil
 	}
+	slog.Debug("cache_miss", "key", cacheKey)
 
 	// Auto-append .JK for known IDX stocks
 	yahooSymbol := symbol
@@ -214,11 +222,13 @@ func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol str
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		slog.Warn("price_api_error", "symbol", yahooSymbol, "source", "yahoo", "error", err)
 		return nil, fmt.Errorf("fetch stock price: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		slog.Warn("price_api_error", "symbol", yahooSymbol, "source", "yahoo", "status", resp.StatusCode)
 		return nil, fmt.Errorf("stock API returned status %d for %s", resp.StatusCode, yahooSymbol)
 	}
 
@@ -278,6 +288,7 @@ func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol str
 	}
 
 	s.setCache(ctx, cacheKey, priceData)
+	slog.Info("price_fetched", "symbol", symbol, "price", price, "source", "yahoo")
 	return priceData, nil
 }
 

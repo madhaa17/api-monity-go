@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"monity/internal/adapter/handler"
@@ -89,9 +89,11 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 	})
 
 	rateLimit := middleware.NewRateLimitMiddleware(&cfg.RateLimit)
-	chain := middleware.CORS(cfg.Security.CORSAllowedOrigins)(
-		middleware.SecurityHeaders(
-			rateLimit.Handler(mux),
+	chain := middleware.RequestLogger(
+		middleware.CORS(cfg.Security.CORSAllowedOrigins)(
+			middleware.SecurityHeaders(
+				rateLimit.Handler(mux),
+			),
 		),
 	)
 
@@ -108,7 +110,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 }
 
 func (a *App) Run() error {
-	log.Printf("server listening on :%s (env=%s)", a.cfg.App.Port, a.cfg.App.Env)
+	slog.Info("server listening", "port", a.cfg.App.Port, "env", a.cfg.App.Env)
 	return a.srv.ListenAndServe()
 }
 

@@ -20,13 +20,13 @@ func NewPerformanceHandler(svc port.AssetPerformanceService) *PerformanceHandler
 func (h *PerformanceHandler) GetAssetPerformance(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
 	uuid := r.PathValue("uuid")
 	if strings.TrimSpace(uuid) == "" {
-		response.Error(w, http.StatusBadRequest, "invalid asset uuid", nil)
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid asset uuid", nil)
 		return
 	}
 
@@ -36,10 +36,10 @@ func (h *PerformanceHandler) GetAssetPerformance(w http.ResponseWriter, r *http.
 	performance, err := h.svc.GetAssetPerformance(r.Context(), userID, uuid, currency)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			response.Error(w, http.StatusNotFound, "asset not found", nil)
+			response.ErrorWithLog(w, r, http.StatusNotFound, "asset not found", nil)
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "failed to get asset performance", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to get asset performance", err.Error())
 		return
 	}
 
@@ -49,7 +49,7 @@ func (h *PerformanceHandler) GetAssetPerformance(w http.ResponseWriter, r *http.
 func (h *PerformanceHandler) GetPortfolioPerformance(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
@@ -58,7 +58,7 @@ func (h *PerformanceHandler) GetPortfolioPerformance(w http.ResponseWriter, r *h
 
 	performance, err := h.svc.GetPortfolioPerformance(r.Context(), userID, currency)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "failed to get portfolio performance", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to get portfolio performance", err.Error())
 		return
 	}
 

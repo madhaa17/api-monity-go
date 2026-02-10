@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"sync"
@@ -51,6 +52,7 @@ func (m *RateLimitMiddleware) Handler(next http.Handler) http.Handler {
 		entry.count++
 		if entry.count > m.cfg.Limit {
 			m.mu.Unlock()
+			slog.Warn("rate_limit_exceeded", "ip", key, "path", r.URL.Path, "count", entry.count, "limit", m.cfg.Limit)
 			w.Header().Set("Retry-After", strconv.Itoa(m.cfg.TTLSeconds))
 			response.Error(w, http.StatusTooManyRequests, "rate limit exceeded", nil)
 			return

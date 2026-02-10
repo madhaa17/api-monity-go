@@ -2,7 +2,7 @@ package handler
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"monity/internal/core/port"
@@ -20,12 +20,12 @@ func NewAuthHandler(svc port.AuthService) *AuthHandler {
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req port.RegistryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid request body", err.Error())
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid request body", err.Error())
 		return
 	}
 
 	if req.Email == "" || req.Password == "" || req.Name == "" {
-		response.Error(w, http.StatusBadRequest, "missing required fields", map[string]string{
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "missing required fields", map[string]string{
 			"email":    "required",
 			"password": "required",
 			"name":     "required",
@@ -35,27 +35,28 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.svc.Register(r.Context(), req)
 	if err != nil {
-		log.Printf("[Register] error: %v", err)
 		if err.Error() == "email already registered" {
-			response.Error(w, http.StatusConflict, "registration failed", err.Error())
+			slog.Warn("register_failed", "email", req.Email, "reason", err.Error())
+			response.ErrorWithLog(w, r, http.StatusConflict, "registration failed", err.Error())
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "internal server error", nil)
+		slog.Error("register_error", "email", req.Email, "error", err)
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "internal server error", nil)
 		return
 	}
-
+	slog.Info("register_success", "email", req.Email, "user_id", resp.User.ID)
 	response.Success(w, http.StatusCreated, "registration successful", resp)
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req port.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid request body", err.Error())
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid request body", err.Error())
 		return
 	}
 
 	if req.Email == "" || req.Password == "" {
-		response.Error(w, http.StatusBadRequest, "missing required fields", map[string]string{
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "missing required fields", map[string]string{
 			"email":    "required",
 			"password": "required",
 		})
@@ -65,13 +66,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.svc.Login(r.Context(), req)
 	if err != nil {
 		if err.Error() == "invalid email or password" {
-			response.Error(w, http.StatusUnauthorized, "login failed", "invalid email or password")
+			slog.Warn("login_failed", "email", req.Email, "reason", "invalid email or password")
+			response.ErrorWithLog(w, r, http.StatusUnauthorized, "login failed", "invalid email or password")
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "internal server error", nil)
+		slog.Error("login_error", "email", req.Email, "error", err)
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "internal server error", nil)
 		return
 	}
-
+	slog.Info("login_success", "email", req.Email, "user_id", resp.User.ID)
 	response.Success(w, http.StatusOK, "login successful", resp)
 }
 
@@ -80,11 +83,11 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		RefreshToken string `json:"refresh_token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid request body", err.Error())
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid request body", err.Error())
 		return
 	}
 	if req.RefreshToken == "" {
-		response.Error(w, http.StatusBadRequest, "refresh_token required", nil)
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "refresh_token required", nil)
 		return
 	}
 
@@ -92,10 +95,10 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err.Error() {
 		case "refresh token required", "invalid or expired refresh token", "invalid refresh token claims", "invalid refresh token payload", "user not found":
-			response.Error(w, http.StatusUnauthorized, "refresh failed", err.Error())
+			response.ErrorWithLog(w, r, http.StatusUnauthorized, "refresh failed", err.Error())
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "internal server error", nil)
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "internal server error", nil)
 		return
 	}
 

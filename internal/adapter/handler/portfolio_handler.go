@@ -20,7 +20,7 @@ func NewPortfolioHandler(svc port.PortfolioService) *PortfolioHandler {
 func (h *PortfolioHandler) GetPortfolio(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
@@ -32,7 +32,7 @@ func (h *PortfolioHandler) GetPortfolio(w http.ResponseWriter, r *http.Request) 
 
 	portfolio, err := h.svc.GetPortfolio(r.Context(), userID, currency)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "failed to get portfolio", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to get portfolio", err.Error())
 		return
 	}
 
@@ -42,13 +42,13 @@ func (h *PortfolioHandler) GetPortfolio(w http.ResponseWriter, r *http.Request) 
 func (h *PortfolioHandler) GetAssetValue(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
 	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
 	uuid := r.PathValue("uuid")
 	if strings.TrimSpace(uuid) == "" {
-		response.Error(w, http.StatusBadRequest, "invalid asset uuid", nil)
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid asset uuid", nil)
 		return
 	}
 
@@ -61,10 +61,10 @@ func (h *PortfolioHandler) GetAssetValue(w http.ResponseWriter, r *http.Request)
 	assetValue, err := h.svc.GetAssetValue(r.Context(), userID, uuid, currency)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			response.Error(w, http.StatusNotFound, "asset not found", nil)
+			response.ErrorWithLog(w, r, http.StatusNotFound, "asset not found", nil)
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "failed to get asset value", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to get asset value", err.Error())
 		return
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"monity/internal/core/port"
@@ -55,10 +56,12 @@ func (s *ExpenseService) CreateExpense(ctx context.Context, userID int64, req po
 	amount := decimal.NewFromFloat(req.Amount)
 
 	// Deduct from CASH asset
+	oldQty := asset.Quantity
 	asset.Quantity = asset.Quantity.Sub(amount)
 	if err := s.assetRepo.Update(ctx, asset); err != nil {
 		return nil, fmt.Errorf("update asset balance: %w", err)
 	}
+	slog.Info("balance_updated", "asset_uuid", asset.UUID, "old", oldQty.String(), "new", asset.Quantity.String())
 
 	expense := &models.Expense{
 		UserID:   userID,
@@ -72,6 +75,7 @@ func (s *ExpenseService) CreateExpense(ctx context.Context, userID int64, req po
 	if err := s.repo.Create(ctx, expense); err != nil {
 		return nil, fmt.Errorf("create expense: %w", err)
 	}
+	slog.Info("expense_created", "user_id", userID, "amount", req.Amount, "category", req.Category, "asset_uuid", req.AssetUUID)
 	return expense, nil
 }
 
@@ -206,6 +210,7 @@ func (s *ExpenseService) DeleteExpense(ctx context.Context, userID int64, uuid s
 	if err := s.repo.Delete(ctx, uuid, userID); err != nil {
 		return fmt.Errorf("delete expense: %w", err)
 	}
+	slog.Info("expense_deleted", "user_id", userID, "uuid", uuid, "amount", expense.Amount.String())
 	return nil
 }
 

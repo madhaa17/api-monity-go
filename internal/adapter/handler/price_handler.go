@@ -19,7 +19,7 @@ func NewPriceHandler(svc port.PriceService) *PriceHandler {
 func (h *PriceHandler) GetCryptoPrice(w http.ResponseWriter, r *http.Request) {
 	symbol := r.PathValue("symbol")
 	if strings.TrimSpace(symbol) == "" {
-		response.Error(w, http.StatusBadRequest, "symbol is required", nil)
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "symbol is required", nil)
 		return
 	}
 
@@ -32,10 +32,10 @@ func (h *PriceHandler) GetCryptoPrice(w http.ResponseWriter, r *http.Request) {
 	price, err := h.svc.GetCryptoPriceWithCurrency(r.Context(), symbol, currency)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			response.Error(w, http.StatusNotFound, "price not found", err.Error())
+			response.ErrorWithLog(w, r, http.StatusNotFound, "price not found", err.Error())
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "failed to fetch price", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to fetch price", err.Error())
 		return
 	}
 
@@ -45,7 +45,7 @@ func (h *PriceHandler) GetCryptoPrice(w http.ResponseWriter, r *http.Request) {
 func (h *PriceHandler) GetStockPrice(w http.ResponseWriter, r *http.Request) {
 	symbol := r.PathValue("symbol")
 	if strings.TrimSpace(symbol) == "" {
-		response.Error(w, http.StatusBadRequest, "symbol is required", nil)
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "symbol is required", nil)
 		return
 	}
 
@@ -58,10 +58,10 @@ func (h *PriceHandler) GetStockPrice(w http.ResponseWriter, r *http.Request) {
 	price, err := h.svc.GetStockPriceWithCurrency(r.Context(), symbol, currency)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			response.Error(w, http.StatusNotFound, "price not found", err.Error())
+			response.ErrorWithLog(w, r, http.StatusNotFound, "price not found", err.Error())
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, "failed to fetch price", err.Error())
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to fetch price", err.Error())
 		return
 	}
 

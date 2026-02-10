@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +12,7 @@ import (
 	"monity/internal/config"
 	"monity/internal/database"
 	"monity/internal/pkg/cache"
+	"monity/internal/pkg/logger"
 )
 
 func main() {
@@ -19,22 +20,28 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		slog.Error("load config", "error", err)
+		os.Exit(1)
 	}
 
+	_ = logger.New(cfg.App.Env)
+
 	if cfg.Database.User == "" || cfg.Database.Name == "" {
-		log.Fatal("DATABASE_USER and DATABASE_NAME must be set (e.g. in .env)")
+		slog.Error("DATABASE_USER and DATABASE_NAME must be set (e.g. in .env)")
+		os.Exit(1)
 	}
 
 	db, err := database.NewDB(ctx, &cfg.Database)
 	if err != nil {
-		log.Fatalf("database: %v", err)
+		slog.Error("database", "error", err)
+		os.Exit(1)
 	}
 	// GORM's generic DB interface doesn't have a Close method directly on *gorm.DB,
 	// but the underlying sql.DB does. We'll handle cleanup in Shutdown or main.
 	sqlDB, err := db.DB()
 	if err != nil {
-		log.Fatalf("get sql db: %v", err)
+		slog.Error("get sql db", "error", err)
+		os.Exit(1)
 	}
 	defer sqlDB.Close()
 
@@ -42,14 +49,15 @@ func main() {
 	if cfg.Redis.Enabled() {
 		rdb, err := database.NewRedis(ctx, &cfg.Redis)
 		if err != nil {
-			log.Fatalf("redis: %v", err)
+			slog.Error("redis", "error", err)
+			os.Exit(1)
 		}
 		defer rdb.Close()
 		c = cache.NewRedisCache(rdb)
-		log.Println("redis: connected, using Redis cache for prices")
+		slog.Info("redis: connected, using Redis cache for prices")
 	} else {
 		c = cache.NewMemoryCache()
-		log.Println("redis: not configured, using in-memory cache for prices")
+		slog.Info("redis: not configured, using in-memory cache for prices")
 	}
 
 	application := app.New(ctx, cfg, db, c)
@@ -59,14 +67,14 @@ func main() {
 
 	go func() {
 		if err := application.Run(); err != nil && err != context.Canceled {
-			log.Printf("server error: %v", err)
+			slog.Error("server error", "error", err)
 		}
 	}()
 
 	<-quit
-	log.Println("shutting down...")
+	slog.Info("shutting down...")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = application.Shutdown(shutdownCtx)
-	log.Println("done")
+	slog.Info("done")
 }

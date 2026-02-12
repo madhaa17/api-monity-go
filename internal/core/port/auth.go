@@ -16,6 +16,8 @@ type AuthService interface {
 	Register(ctx context.Context, req RegistryRequest) (*AuthResponse, error)
 	Login(ctx context.Context, req LoginRequest) (*AuthResponse, error)
 	Refresh(ctx context.Context, refreshToken string) (*AuthResponse, error)
+	GetMe(ctx context.Context, userID int64) (*models.User, error)
+	Logout(ctx context.Context, accessToken string, refreshToken string) error
 }
 
 // DTOs for Service layer - arguably could be in models or service package but keeping interfaces together

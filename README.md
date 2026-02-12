@@ -71,7 +71,7 @@ backend/
 |-------------|-----------------------------------------|--------|
 | Root        | `GET /` → `{"status":"ok"}`             | —      |
 | Health      | `GET /health` → status + DB            | —      |
-| Auth        | `POST /api/v1/auth/register`, `.../login` | —    |
+| Auth        | `POST /api/v1/auth/register`, `.../login`, `.../refresh`, `GET .../me`, `POST .../logout` | Bearer (me, logout) |
 | Assets      | CRUD assets (crypto, stock, etc.)       | Bearer |
 | Incomes     | CRUD income                             | Bearer |
 | Expenses    | CRUD expenses                           | Bearer |
@@ -82,6 +82,9 @@ backend/
 | Insight     | Financial insights                      | Bearer |
 
 Protected routes require header: `Authorization: Bearer <token>`.
+
+- **Postman:** Import [docs/postman_collection.json](docs/postman_collection.json). Set `token` (dari response Login) untuk request Me dan Logout.
+- **cURL:** Contoh lengkap ada di [docs/curl-examples.md](docs/curl-examples.md).
 
 ## Security & middleware
 

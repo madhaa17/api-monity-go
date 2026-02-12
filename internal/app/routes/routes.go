@@ -12,6 +12,7 @@ const APIPrefix = "/api/v1"
 type Handlers struct {
 	Auth              *handler.AuthHandler
 	Asset             *handler.AssetHandler
+	Activity          *handler.ActivityHandler
 	Expense           *handler.ExpenseHandler
 	Income            *handler.IncomeHandler
 	SavingGoal        *handler.SavingGoalHandler
@@ -39,6 +40,7 @@ func New(auth *middleware.AuthMiddleware, h *Handlers) *Router {
 func (r *Router) Setup() *http.ServeMux {
 	r.registerAuthRoutes()
 	r.registerAssetRoutes()
+	r.registerActivityRoutes()
 	r.registerExpenseRoutes()
 	r.registerIncomeRoutes()
 	r.registerSavingGoalRoutes()

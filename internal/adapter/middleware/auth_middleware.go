@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"monity/internal/config"
+	"monity/internal/pkg/cache"
 	"monity/internal/pkg/response"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -21,12 +22,15 @@ const (
 	CtxKeyRole   CtxKey = "role"
 )
 
+const revokedKeyPrefix = "revoked:"
+
 type AuthMiddleware struct {
-	cfg *config.Config
+	cfg   *config.Config
+	cache cache.Cache
 }
 
-func NewAuthMiddleware(cfg *config.Config) *AuthMiddleware {
-	return &AuthMiddleware{cfg: cfg}
+func NewAuthMiddleware(cfg *config.Config, c cache.Cache) *AuthMiddleware {
+	return &AuthMiddleware{cfg: cfg, cache: c}
 }
 
 func (m *AuthMiddleware) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
@@ -71,6 +75,17 @@ func (m *AuthMiddleware) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 			slog.Warn("auth_failed", "reason", "invalid token claims", "ip", ip, "path", path)
 			response.Error(w, http.StatusUnauthorized, "invalid token claims", nil)
 			return
+		}
+
+		if m.cache != nil {
+			if jti, _ := claims["jti"].(string); jti != "" {
+				revoked, _ := m.cache.Get(r.Context(), revokedKeyPrefix+jti)
+				if len(revoked) > 0 {
+					slog.Warn("auth_failed", "reason", "token has been revoked", "ip", ip, "path", path)
+					response.Error(w, http.StatusUnauthorized, "token has been revoked", nil)
+					return
+				}
+			}
 		}
 
 		// Extract claims (safely handling types)

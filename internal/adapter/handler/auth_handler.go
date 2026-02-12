@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
+	"monity/internal/adapter/middleware"
 	"monity/internal/core/port"
 	"monity/internal/pkg/response"
 )
@@ -103,4 +105,48 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Success(w, http.StatusOK, "token refreshed", resp)
+}
+
+func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
+	if !ok {
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+	user, err := h.svc.GetMe(r.Context(), userID)
+	if err != nil {
+		if err.Error() == "user not found" {
+			response.ErrorWithLog(w, r, http.StatusNotFound, "user not found", nil)
+			return
+		}
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to get user", nil)
+		return
+	}
+	response.Success(w, http.StatusOK, "ok", user)
+}
+
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(middleware.CtxKeyUserID).(int64)
+
+	authHeader := r.Header.Get("Authorization")
+	var accessToken string
+	if parts := strings.SplitN(authHeader, " ", 2); len(parts) == 2 && parts[0] == "Bearer" {
+		accessToken = parts[1]
+	}
+	if accessToken == "" {
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "authorization header required", nil)
+		return
+	}
+
+	var body struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	if err := h.svc.Logout(r.Context(), accessToken, body.RefreshToken); err != nil {
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "logout failed", nil)
+		return
+	}
+	slog.Info("logout", "user_id", userID)
+	response.Success(w, http.StatusOK, "logged out", nil)
 }

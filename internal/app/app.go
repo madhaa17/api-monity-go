@@ -34,8 +34,9 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 	assetPriceHistoryRepo := repository.NewAssetPriceHistoryRepository(db)
 	insightRepo := repository.NewInsightRepository(db)
 
-	authSvc := service.NewAuthService(userRepo, cfg)
+	authSvc := service.NewAuthService(userRepo, cfg, c)
 	assetSvc := service.NewAssetService(assetRepo)
+	activitySvc := service.NewActivityService(expenseRepo, incomeRepo)
 	expenseSvc := service.NewExpenseService(expenseRepo, assetRepo)
 	incomeSvc := service.NewIncomeService(incomeRepo, assetRepo)
 	savingGoalSvc := service.NewSavingGoalService(savingGoalRepo)
@@ -45,11 +46,12 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 	portfolioSvc := service.NewPortfolioService(assetRepo, priceSvc, assetPriceHistoryRepo)
 	performanceSvc := service.NewPerformanceService(assetRepo, priceSvc)
 
-	authMiddleware := middleware.NewAuthMiddleware(cfg)
+	authMiddleware := middleware.NewAuthMiddleware(cfg, c)
 
 	handlers := &routes.Handlers{
 		Auth:              handler.NewAuthHandler(authSvc),
 		Asset:             handler.NewAssetHandler(assetSvc),
+		Activity:          handler.NewActivityHandler(activitySvc),
 		Expense:           handler.NewExpenseHandler(expenseSvc),
 		Income:            handler.NewIncomeHandler(incomeSvc),
 		SavingGoal:        handler.NewSavingGoalHandler(savingGoalSvc),

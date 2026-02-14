@@ -835,7 +835,7 @@
 		},
 		{
 			"name": "Prices (Public)",
-			"description": "Real-time price lookup. No auth required.\n\n- Crypto: CoinGecko (free, no API key). Supported: BTC, ETH, SOL, USDT, BNB, XRP, ADA, DOGE, etc.\n- Stock: Yahoo Finance (free). IDX stocks auto-appended .JK suffix.\n\nDefault currency: IDR.",
+			"description": "Real-time price lookup and chart data. No auth required.\n\n- Crypto: CoinGecko (free, no API key). Supported: BTC, ETH, SOL, USDT, BNB, XRP, ADA, DOGE, etc.\n- Stock: Yahoo Finance (free). IDX stocks auto-appended .JK suffix.\n\nChart: crypto chart uses market_chart (query: days=1|7|14|30|90, currency); stock chart uses Yahoo chart (query: range=1d|5d|1mo|3mo|6mo|1y|2y|5y|10y|ytd|max, interval=1d|1wk|1mo).\n\nDefault currency: IDR.",
 			"item": [
 				{
 					"name": "Get Crypto Price",
@@ -895,6 +895,42 @@
 							],
 							"variable": [
 								{ "key": "symbol", "value": "BBCA", "description": "Stock ticker: BBRI, BBCA, TLKM, etc." }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Crypto Chart",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/v1/prices/crypto/:symbol/chart?days=7&currency=idr",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "prices", "crypto", ":symbol", "chart"],
+							"query": [
+								{ "key": "days", "value": "7", "description": "1, 7, 14, 30, 90" },
+								{ "key": "currency", "value": "idr" }
+							],
+							"variable": [
+								{ "key": "symbol", "value": "BTC", "description": "Crypto ticker: BTC, ETH, SOL, etc." }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Stock Chart",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/v1/prices/stock/:symbol/chart?range=1mo&interval=1d",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "prices", "stock", ":symbol", "chart"],
+							"query": [
+								{ "key": "range", "value": "1mo", "description": "1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max" },
+								{ "key": "interval", "value": "1d", "description": "1d, 1wk, 1mo" }
+							],
+							"variable": [
+								{ "key": "symbol", "value": "BBCA", "description": "Stock ticker: BBRI, BBCA, etc. IDX gets .JK" }
 							]
 						}
 					}

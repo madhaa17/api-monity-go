@@ -483,6 +483,186 @@ func (s *PriceService) GetHistoricalCryptoOHLCV(ctx context.Context, symbol stri
 }
 
 // ---------------------------------------------------------------------------
+// Crypto chart — CoinGecko market_chart
+// ---------------------------------------------------------------------------
+
+const (
+	chartCacheTTL   = 15 * time.Minute
+	maxChartPoints  = 200
+)
+
+func (s *PriceService) GetCryptoChart(ctx context.Context, symbol string, currency string, days int) (*port.ChartResponse, error) {
+	symbol = strings.ToUpper(symbol)
+	currency = strings.ToUpper(currency)
+	if currency == "" {
+		currency = port.DefaultCurrency
+	}
+
+	cacheKey := fmt.Sprintf("chart:crypto:%s:%s:%d", symbol, currency, days)
+	if cached := s.getChartFromCache(ctx, cacheKey); cached != nil {
+		slog.Debug("cache_hit", "key", cacheKey)
+		return cached, nil
+	}
+
+	coinID, ok := cryptoIDMap[symbol]
+	if !ok {
+		return nil, fmt.Errorf("unsupported crypto symbol: %s", symbol)
+	}
+
+	vsCurrency := strings.ToLower(currency)
+	url := fmt.Sprintf("https://api.coingecko.com/api/v3/coins/%s/market_chart?vs_currency=%s&days=%d", coinID, vsCurrency, days)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch crypto chart: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("coingecko market_chart API returned status %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Prices [][]float64 `json:"prices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode chart response: %w", err)
+	}
+
+	data := make([]port.ChartDataPoint, 0, len(result.Prices))
+	for _, pair := range result.Prices {
+		if len(pair) < 2 {
+			continue
+		}
+		ms := int64(pair[0])
+		data = append(data, port.ChartDataPoint{T: ms / 1000, P: pair[1]})
+	}
+	data = downsampleChartData(data, maxChartPoints)
+	out := &port.ChartResponse{Symbol: symbol, Currency: currency, Data: data}
+	s.setChartCache(ctx, cacheKey, out)
+	return out, nil
+}
+
+// downsampleChartData returns at most max points with even stride (keeps first and last).
+func downsampleChartData(data []port.ChartDataPoint, max int) []port.ChartDataPoint {
+	n := len(data)
+	if n <= max || max <= 0 {
+		return data
+	}
+	if max == 1 {
+		return data[:1]
+	}
+	out := make([]port.ChartDataPoint, max)
+	for i := 0; i < max; i++ {
+		idx := i * (n - 1) / (max - 1)
+		out[i] = data[idx]
+	}
+	return out
+}
+
+// ---------------------------------------------------------------------------
+// Stock chart — Yahoo Finance chart
+// ---------------------------------------------------------------------------
+
+func (s *PriceService) GetStockChart(ctx context.Context, symbol string, rangeParam string, interval string) (*port.ChartResponse, error) {
+	symbol = strings.ToUpper(symbol)
+
+	yahooSymbol := symbol
+	if IDXStocks[symbol] {
+		yahooSymbol = symbol + ".JK"
+	}
+
+	cacheKey := fmt.Sprintf("chart:stock:%s:%s:%s", yahooSymbol, rangeParam, interval)
+	if cached := s.getChartFromCache(ctx, cacheKey); cached != nil {
+		slog.Debug("cache_hit", "key", cacheKey)
+		return cached, nil
+	}
+
+	url := fmt.Sprintf("%s/v8/finance/chart/%s?range=%s&interval=%s", s.cfg.StockAPI, yahooSymbol, rangeParam, interval)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch stock chart: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("stock chart API returned status %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Chart struct {
+			Result []struct {
+				Meta struct {
+					Currency string `json:"currency"`
+				} `json:"meta"`
+				Timestamp []int64   `json:"timestamp"`
+				Indicators struct {
+					Quote []struct {
+						Close []float64 `json:"close"`
+					} `json:"quote"`
+				} `json:"indicators"`
+			} `json:"result"`
+			Error *struct {
+				Description string `json:"description"`
+			} `json:"error"`
+		} `json:"chart"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode chart response: %w", err)
+	}
+
+	if result.Chart.Error != nil {
+		return nil, fmt.Errorf("yahoo chart error: %s", result.Chart.Error.Description)
+	}
+
+	if len(result.Chart.Result) == 0 {
+		return nil, fmt.Errorf("no chart data found for %s", yahooSymbol)
+	}
+
+	r := result.Chart.Result[0]
+	currency := strings.ToUpper(r.Meta.Currency)
+	if currency == "" {
+		currency = port.DefaultCurrency
+	}
+
+	times := r.Timestamp
+	quotes := r.Indicators.Quote
+	if len(quotes) == 0 || len(quotes[0].Close) == 0 {
+		return nil, fmt.Errorf("no quote data for %s", yahooSymbol)
+	}
+	closes := quotes[0].Close
+
+	n := len(times)
+	if len(closes) < n {
+		n = len(closes)
+	}
+
+	data := make([]port.ChartDataPoint, 0, n)
+	for i := 0; i < n; i++ {
+		data = append(data, port.ChartDataPoint{T: times[i], P: closes[i]})
+	}
+	data = downsampleChartData(data, maxChartPoints)
+	out := &port.ChartResponse{Symbol: symbol, Currency: currency, Data: data}
+	s.setChartCache(ctx, cacheKey, out)
+	return out, nil
+}
+
+// ---------------------------------------------------------------------------
 // Cache helpers
 // ---------------------------------------------------------------------------
 
@@ -505,4 +685,21 @@ func (s *PriceService) setCache(ctx context.Context, key string, data *port.Pric
 	}
 	raw, _ := json.Marshal(data)
 	_ = s.cache.Set(ctx, key, raw, ttl)
+}
+
+func (s *PriceService) getChartFromCache(ctx context.Context, key string) *port.ChartResponse {
+	raw, err := s.cache.Get(ctx, key)
+	if err != nil {
+		return nil
+	}
+	var data port.ChartResponse
+	if json.Unmarshal(raw, &data) != nil {
+		return nil
+	}
+	return &data
+}
+
+func (s *PriceService) setChartCache(ctx context.Context, key string, data *port.ChartResponse) {
+	raw, _ := json.Marshal(data)
+	_ = s.cache.Set(ctx, key, raw, chartCacheTTL)
 }

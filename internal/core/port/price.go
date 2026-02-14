@@ -22,6 +22,21 @@ type PriceService interface {
 	GetPrice(ctx context.Context, assetType string, symbol string) (*PriceData, error)
 	GetHistoricalCryptoPrice(ctx context.Context, symbol string, timestamp time.Time) (*PriceData, error)
 	GetHistoricalCryptoOHLCV(ctx context.Context, symbol string, timeStart, timeEnd time.Time, interval string) ([]OHLCVData, error)
+	GetCryptoChart(ctx context.Context, symbol string, currency string, days int) (*ChartResponse, error)
+	GetStockChart(ctx context.Context, symbol string, rangeParam string, interval string) (*ChartResponse, error)
+}
+
+// ChartDataPoint is one point for a line chart (t = Unix second, p = price).
+type ChartDataPoint struct {
+	T int64   `json:"t"`
+	P float64 `json:"p"`
+}
+
+// ChartResponse is the response for chart endpoints (crypto and stock).
+type ChartResponse struct {
+	Symbol   string           `json:"symbol"`
+	Currency string           `json:"currency"`
+	Data     []ChartDataPoint `json:"data"`
 }
 
 type PriceData struct {

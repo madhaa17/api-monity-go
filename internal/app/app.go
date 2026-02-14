@@ -91,10 +91,12 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 	})
 
 	rateLimit := middleware.NewRateLimitMiddleware(&cfg.RateLimit)
-	chain := middleware.RequestLogger(
-		middleware.CORS(cfg.Security.CORSAllowedOrigins)(
-			middleware.SecurityHeaders(
-				rateLimit.Handler(mux),
+	chain := middleware.Gzip(
+		middleware.RequestLogger(
+			middleware.CORS(cfg.Security.CORSAllowedOrigins)(
+				middleware.SecurityHeaders(
+					rateLimit.Handler(mux),
+				),
 			),
 		),
 	)

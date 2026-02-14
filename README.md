@@ -78,7 +78,8 @@ backend/
 | Incomes     | CRUD income                             | Bearer |
 | Expenses    | CRUD expenses                           | Bearer |
 | Saving goals| CRUD saving goals                       | Bearer |
-| Price       | Crypto (CoinGecko) / stock (Yahoo Finance) — free, no API key | Bearer |
+| Price       | Crypto (CoinGecko) / stock (Yahoo Finance) — free, no API key | —      |
+| Price chart| `GET .../prices/crypto/:symbol/chart?days=7&currency=idr`, `GET .../prices/stock/:symbol/chart?range=1mo&interval=1d`. Response: time series `data[]` dengan `t` (Unix second) dan `p` (price); lihat [docs/curl-examples.md](docs/curl-examples.md) untuk format lengkap. | —      |
 | Portfolio   | Portfolio summary                       | Bearer |
 | Performance | Asset performance                       | Bearer |
 | Insight     | Financial insights                      | Bearer |

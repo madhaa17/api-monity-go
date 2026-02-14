@@ -3,13 +3,13 @@ package config
 import "strconv"
 
 type Config struct {
-	App        AppConfig
-	Database   DatabaseConfig
-	Redis      RedisConfig
-	Jwt        JwtConfig
-	PriceAPI   PriceAPIConfig
-	RateLimit  RateLimitConfig
-	Security   SecurityConfig
+	App       AppConfig
+	Database  DatabaseConfig
+	Redis     RedisConfig
+	Jwt       JwtConfig
+	PriceAPI  PriceAPIConfig
+	RateLimit RateLimitConfig
+	Security  SecurityConfig
 }
 
 type RedisConfig struct {

@@ -34,7 +34,7 @@ func (s *PerformanceService) GetAssetPerformance(ctx context.Context, userID int
 	if asset == nil {
 		return nil, fmt.Errorf("asset not found")
 	}
-	
+
 	// Default currency
 	if currency == "" {
 		currency = asset.PurchaseCurrency
@@ -42,12 +42,12 @@ func (s *PerformanceService) GetAssetPerformance(ctx context.Context, userID int
 			currency = port.DefaultCurrency
 		}
 	}
-	
+
 	// Calculate current value
 	currentPrice := decimal.Zero
 	currentValue := decimal.Zero
 	priceChange24h := 0.0
-	
+
 	if asset.Symbol != nil && *asset.Symbol != "" {
 		var priceData *port.PriceData
 		switch asset.Type {
@@ -56,34 +56,34 @@ func (s *PerformanceService) GetAssetPerformance(ctx context.Context, userID int
 		case models.AssetTypeStock:
 			priceData, err = s.priceService.GetStockPriceWithCurrency(ctx, *asset.Symbol, currency)
 		}
-		
+
 		if err == nil && priceData != nil {
 			currentPrice = decimal.NewFromFloat(priceData.Price)
 			effectiveQty := s.effectiveQuantity(asset)
 			currentValue = effectiveQty.Mul(currentPrice)
 		}
 	}
-	
+
 	// If no current price available, use purchase price
 	if currentPrice.IsZero() {
 		currentPrice = asset.PurchasePrice
 		effectiveQty := s.effectiveQuantity(asset)
 		currentValue = effectiveQty.Mul(currentPrice)
 	}
-	
+
 	// Calculate performance metrics
 	profitLoss := currentValue.Sub(asset.TotalCost)
 	profitLossPercent := decimal.Zero
 	if !asset.TotalCost.IsZero() {
 		profitLossPercent = profitLoss.Div(asset.TotalCost).Mul(decimal.NewFromInt(100))
 	}
-	
+
 	// Holding period in days
 	holdingPeriod := int(time.Since(asset.PurchaseDate).Hours() / 24)
 	if holdingPeriod < 1 {
 		holdingPeriod = 1
 	}
-	
+
 	// Annualized return
 	annualizedReturn := decimal.Zero
 	if holdingPeriod > 0 {
@@ -92,7 +92,7 @@ func (s *PerformanceService) GetAssetPerformance(ctx context.Context, userID int
 			annualizedReturn = profitLossPercent.Div(years)
 		}
 	}
-	
+
 	// Performance status
 	status := "break-even"
 	if profitLoss.GreaterThan(decimal.Zero) {
@@ -100,7 +100,7 @@ func (s *PerformanceService) GetAssetPerformance(ctx context.Context, userID int
 	} else if profitLoss.LessThan(decimal.Zero) {
 		status = "loss"
 	}
-	
+
 	// Analysis
 	message := s.generatePerformanceMessage(asset.Name, profitLossPercent, status)
 	recommendation := s.generateRecommendation(asset, currentPrice, profitLossPercent)
@@ -108,13 +108,13 @@ func (s *PerformanceService) GetAssetPerformance(ctx context.Context, userID int
 	if asset.TargetPrice != nil && currentPrice.GreaterThanOrEqual(*asset.TargetPrice) {
 		targetReached = true
 	}
-	
+
 	// Transaction fee
 	transactionFee := decimal.Zero
 	if asset.TransactionFee != nil {
 		transactionFee = *asset.TransactionFee
 	}
-	
+
 	return &port.AssetPerformanceResponse{
 		AssetUUID: asset.UUID,
 		AssetName: asset.Name,
@@ -136,12 +136,12 @@ func (s *PerformanceService) GetAssetPerformance(ctx context.Context, userID int
 			LastUpdated:    time.Now(),
 		},
 		Performance: port.PerformanceMetrics{
-			ProfitLoss:         profitLoss,
-			ProfitLossPercent:  profitLossPercent,
-			ROI:                profitLossPercent,
-			Status:             status,
-			HoldingPeriod:      holdingPeriod,
-			AnnualizedReturn:   annualizedReturn,
+			ProfitLoss:        profitLoss,
+			ProfitLossPercent: profitLossPercent,
+			ROI:               profitLossPercent,
+			Status:            status,
+			HoldingPeriod:     holdingPeriod,
+			AnnualizedReturn:  annualizedReturn,
 		},
 		Analysis: port.PerformanceAnalysis{
 			Message:        message,
@@ -157,18 +157,18 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 	if err != nil {
 		return nil, fmt.Errorf("list assets: %w", err)
 	}
-	
+
 	if currency == "" {
 		currency = port.DefaultCurrency
 	}
-	
+
 	// Initialize aggregates
 	totalInvested := decimal.Zero
 	totalCurrentValue := decimal.Zero
 	allocationMap := make(map[string]port.AssetTypeAllocation)
 	var performers []port.PerformerSummary
 	statusSummary := port.StatusSummary{}
-	
+
 	// Process each asset
 	for _, asset := range assets {
 		// Count by status
@@ -180,12 +180,12 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 		case models.AssetStatusPlanned:
 			statusSummary.Planned++
 		}
-		
+
 		// Skip planned assets from calculations
 		if asset.Status == models.AssetStatusPlanned {
 			continue
 		}
-		
+
 		// Calculate current value
 		currentPrice := asset.PurchasePrice
 		if asset.Symbol != nil && *asset.Symbol != "" {
@@ -200,7 +200,7 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 				currentPrice = decimal.NewFromFloat(priceData.Price)
 			}
 		}
-		
+
 		effectiveQty := s.effectiveQuantity(&asset)
 		currentValue := effectiveQty.Mul(currentPrice)
 		profitLoss := currentValue.Sub(asset.TotalCost)
@@ -208,11 +208,11 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 		if !asset.TotalCost.IsZero() {
 			profitLossPercent = profitLoss.Div(asset.TotalCost).Mul(decimal.NewFromInt(100))
 		}
-		
+
 		// Aggregate totals
 		totalInvested = totalInvested.Add(asset.TotalCost)
 		totalCurrentValue = totalCurrentValue.Add(currentValue)
-		
+
 		// Asset type allocation
 		assetType := string(asset.Type)
 		allocation := allocationMap[assetType]
@@ -221,7 +221,7 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 		allocation.CurrentValue = allocation.CurrentValue.Add(currentValue)
 		allocation.ProfitLoss = allocation.ProfitLoss.Add(profitLoss)
 		allocationMap[assetType] = allocation
-		
+
 		// Add to performers list
 		performers = append(performers, port.PerformerSummary{
 			UUID:              asset.UUID,
@@ -231,14 +231,14 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 			ProfitLoss:        profitLoss,
 		})
 	}
-	
+
 	// Calculate portfolio totals
 	totalProfitLoss := totalCurrentValue.Sub(totalInvested)
 	totalProfitLossPercent := decimal.Zero
 	if !totalInvested.IsZero() {
 		totalProfitLossPercent = totalProfitLoss.Div(totalInvested).Mul(decimal.NewFromInt(100))
 	}
-	
+
 	// Calculate allocation percentages and ROI
 	for assetType, allocation := range allocationMap {
 		if !totalCurrentValue.IsZero() {
@@ -249,16 +249,16 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 		}
 		allocationMap[assetType] = allocation
 	}
-	
+
 	// Sort performers
 	sort.Slice(performers, func(i, j int) bool {
 		return performers[i].ProfitLossPercent.GreaterThan(performers[j].ProfitLossPercent)
 	})
-	
+
 	// Get top 5 gainers and losers
 	gainers := []port.PerformerSummary{}
 	losers := []port.PerformerSummary{}
-	
+
 	for _, p := range performers {
 		if p.ProfitLossPercent.GreaterThan(decimal.Zero) {
 			if len(gainers) < 5 {
@@ -266,7 +266,7 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 			}
 		}
 	}
-	
+
 	// Reverse for losers (worst first)
 	for i := len(performers) - 1; i >= 0; i-- {
 		if performers[i].ProfitLossPercent.LessThan(decimal.Zero) {
@@ -275,7 +275,7 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 			}
 		}
 	}
-	
+
 	return &port.PortfolioPerformanceResponse{
 		Overview: port.PortfolioOverview{
 			TotalInvested:          totalInvested,
@@ -298,7 +298,7 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 func (s *PerformanceService) generatePerformanceMessage(assetName string, profitLossPercent decimal.Decimal, status string) string {
 	emoji := ""
 	verb := ""
-	
+
 	switch status {
 	case "profit":
 		emoji = "🎉"
@@ -310,7 +310,7 @@ func (s *PerformanceService) generatePerformanceMessage(assetName string, profit
 		emoji = "⚪"
 		return fmt.Sprintf("Your %s investment is at break-even %s", assetName, emoji)
 	}
-	
+
 	return fmt.Sprintf("Your %s investment is %s %.2f%% %s", assetName, verb, profitLossPercent.Abs().InexactFloat64(), emoji)
 }
 
@@ -319,27 +319,27 @@ func (s *PerformanceService) generateRecommendation(asset *models.Asset, current
 	if asset.TargetPrice != nil && currentPrice.GreaterThanOrEqual(*asset.TargetPrice) {
 		return "Target price reached! Consider taking profit."
 	}
-	
+
 	// High profit
 	if profitLossPercent.GreaterThan(decimal.NewFromInt(50)) {
 		return "Strong performance! Consider taking partial profits or rebalancing."
 	}
-	
+
 	// Moderate profit
 	if profitLossPercent.GreaterThan(decimal.NewFromInt(20)) {
 		return "Good performance! Continue holding or consider your exit strategy."
 	}
-	
+
 	// Significant loss
 	if profitLossPercent.LessThan(decimal.NewFromInt(-20)) {
 		return "Significant loss. Review your investment thesis and consider cutting losses."
 	}
-	
+
 	// Moderate loss
 	if profitLossPercent.LessThan(decimal.NewFromInt(-10)) {
 		return "Currently in loss. Hold if you believe in long-term prospects."
 	}
-	
+
 	return "Monitor regularly and stick to your investment plan."
 }
 

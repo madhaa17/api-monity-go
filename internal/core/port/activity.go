@@ -8,7 +8,7 @@ import (
 )
 
 type ActivityService interface {
-	ListActivities(ctx context.Context, userID int64, groupBy string) (*ActivityResponse, error)
+	ListActivities(ctx context.Context, userID int64, groupBy string, dateFilter string, timezone string) (*ActivityResponse, error)
 }
 
 // ActivityItem is one entry in a group: either income or expense, in chronological order.
@@ -20,7 +20,7 @@ type ActivityItem struct {
 	CreatedAt time.Time       `json:"createdAt"`
 	Note      *string         `json:"note,omitempty"`
 	Source    string          `json:"source,omitempty"`   // income only
-	Category  string          `json:"category,omitempty"`  // expense only
+	Category  string          `json:"category,omitempty"` // expense only
 }
 
 type ActivityGroup struct {

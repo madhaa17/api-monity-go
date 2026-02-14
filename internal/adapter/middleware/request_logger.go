@@ -15,7 +15,7 @@ const CtxKeyRequestID CtxKey = "requestID"
 // responseWriter wraps http.ResponseWriter to capture status code and bytes written.
 type responseWriter struct {
 	http.ResponseWriter
-	status int
+	status  int
 	written int64
 }
 

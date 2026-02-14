@@ -27,29 +27,29 @@ type CreateAssetRequest struct {
 	Type     models.AssetType
 	Quantity float64 // Keeping as float64 for JSON request convenience, will convert to decimal
 	Symbol   *string
-	
+
 	// Purchase Information (required for new assets)
 	PurchasePrice    float64
 	PurchaseDate     string // ISO 8601 format
 	PurchaseCurrency string
 	TotalCost        float64
-	
+
 	// Additional Costs (optional)
 	TransactionFee  *float64
 	MaintenanceCost *float64
-	
+
 	// Target & Planning (optional)
 	TargetPrice *float64
 	TargetDate  *string
-	
+
 	// Real Asset Specific (optional)
 	EstimatedYield *float64
 	YieldPeriod    *string
-	
+
 	// Documentation (optional)
 	Description *string
 	Notes       *string
-	
+
 	// Status (defaults to ACTIVE)
 	Status *models.AssetStatus
 }
@@ -59,29 +59,29 @@ type UpdateAssetRequest struct {
 	Type     *models.AssetType
 	Quantity *float64
 	Symbol   *string
-	
+
 	// Purchase Information
 	PurchasePrice    *float64
 	PurchaseDate     *string
 	PurchaseCurrency *string
 	TotalCost        *float64
-	
+
 	// Additional Costs
 	TransactionFee  *float64
 	MaintenanceCost *float64
-	
+
 	// Target & Planning
 	TargetPrice *float64
 	TargetDate  *string
-	
+
 	// Real Asset Specific
 	EstimatedYield *float64
 	YieldPeriod    *string
-	
+
 	// Documentation
 	Description *string
 	Notes       *string
-	
+
 	// Status
 	Status    *models.AssetStatus
 	SoldAt    *string

@@ -30,39 +30,39 @@ func (s *AssetService) CreateAsset(ctx context.Context, userID int64, req port.C
 		}
 		purchaseDate = parsed
 	}
-	
+
 	// Default values
 	purchaseCurrency := "IDR"
 	if req.PurchaseCurrency != "" {
 		purchaseCurrency = req.PurchaseCurrency
 	}
-	
+
 	status := models.AssetStatusActive
 	if req.Status != nil {
 		status = *req.Status
 	}
-	
+
 	asset := &models.Asset{
 		UserID:   userID,
 		Name:     req.Name,
 		Type:     req.Type,
 		Quantity: decimal.NewFromFloat(req.Quantity),
 		Symbol:   req.Symbol,
-		
+
 		// Purchase Information
 		PurchasePrice:    decimal.NewFromFloat(req.PurchasePrice),
 		PurchaseDate:     purchaseDate,
 		PurchaseCurrency: purchaseCurrency,
 		TotalCost:        decimal.NewFromFloat(req.TotalCost),
-		
+
 		// Documentation
 		Description: req.Description,
 		Notes:       req.Notes,
-		
+
 		// Status
 		Status: status,
 	}
-	
+
 	// Optional fields
 	if req.TransactionFee != nil {
 		fee := decimal.NewFromFloat(*req.TransactionFee)
@@ -137,7 +137,7 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 	if req.Symbol != nil {
 		asset.Symbol = req.Symbol
 	}
-	
+
 	// Purchase Information
 	if req.PurchasePrice != nil {
 		asset.PurchasePrice = decimal.NewFromFloat(*req.PurchasePrice)
@@ -155,7 +155,7 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 	if req.TotalCost != nil {
 		asset.TotalCost = decimal.NewFromFloat(*req.TotalCost)
 	}
-	
+
 	// Additional Costs
 	if req.TransactionFee != nil {
 		fee := decimal.NewFromFloat(*req.TransactionFee)
@@ -165,7 +165,7 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 		cost := decimal.NewFromFloat(*req.MaintenanceCost)
 		asset.MaintenanceCost = &cost
 	}
-	
+
 	// Target & Planning
 	if req.TargetPrice != nil {
 		price := decimal.NewFromFloat(*req.TargetPrice)
@@ -177,7 +177,7 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 			asset.TargetDate = &parsed
 		}
 	}
-	
+
 	// Real Asset Specific
 	if req.EstimatedYield != nil {
 		yield := decimal.NewFromFloat(*req.EstimatedYield)
@@ -186,7 +186,7 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 	if req.YieldPeriod != nil {
 		asset.YieldPeriod = req.YieldPeriod
 	}
-	
+
 	// Documentation
 	if req.Description != nil {
 		asset.Description = req.Description
@@ -194,7 +194,7 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 	if req.Notes != nil {
 		asset.Notes = req.Notes
 	}
-	
+
 	// Status
 	if req.Status != nil {
 		asset.Status = *req.Status

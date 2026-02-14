@@ -19,21 +19,21 @@ import (
 // cryptoIDMap maps ticker symbols to CoinGecko IDs.
 // Add more entries as needed.
 var cryptoIDMap = map[string]string{
-	"BTC":  "bitcoin",
-	"ETH":  "ethereum",
-	"SOL":  "solana",
-	"USDT": "tether",
-	"BNB":  "binancecoin",
-	"XRP":  "ripple",
-	"ADA":  "cardano",
-	"DOGE": "dogecoin",
-	"AVAX": "avalanche-2",
-	"DOT":  "polkadot",
+	"BTC":   "bitcoin",
+	"ETH":   "ethereum",
+	"SOL":   "solana",
+	"USDT":  "tether",
+	"BNB":   "binancecoin",
+	"XRP":   "ripple",
+	"ADA":   "cardano",
+	"DOGE":  "dogecoin",
+	"AVAX":  "avalanche-2",
+	"DOT":   "polkadot",
 	"MATIC": "matic-network",
-	"LINK": "chainlink",
-	"ATOM": "cosmos",
-	"UNI":  "uniswap",
-	"LTC":  "litecoin",
+	"LINK":  "chainlink",
+	"ATOM":  "cosmos",
+	"UNI":   "uniswap",
+	"LTC":   "litecoin",
 }
 
 type PriceService struct {

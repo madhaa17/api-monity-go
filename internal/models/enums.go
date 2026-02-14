@@ -29,12 +29,12 @@ const (
 type ExpenseCategory string
 
 const (
-	ExpenseCategoryFood     ExpenseCategory = "FOOD"
-	ExpenseCategoryTransport ExpenseCategory = "TRANSPORT"
-	ExpenseCategoryHousing  ExpenseCategory = "HOUSING"
-	ExpenseCategoryUtilities ExpenseCategory = "UTILITIES"
-	ExpenseCategoryHealth   ExpenseCategory = "HEALTH"
+	ExpenseCategoryFood          ExpenseCategory = "FOOD"
+	ExpenseCategoryTransport     ExpenseCategory = "TRANSPORT"
+	ExpenseCategoryHousing       ExpenseCategory = "HOUSING"
+	ExpenseCategoryUtilities     ExpenseCategory = "UTILITIES"
+	ExpenseCategoryHealth        ExpenseCategory = "HEALTH"
 	ExpenseCategoryEntertainment ExpenseCategory = "ENTERTAINMENT"
-	ExpenseCategoryShopping ExpenseCategory = "SHOPPING"
-	ExpenseCategoryOther   ExpenseCategory = "OTHER"
+	ExpenseCategoryShopping      ExpenseCategory = "SHOPPING"
+	ExpenseCategoryOther         ExpenseCategory = "OTHER"
 )

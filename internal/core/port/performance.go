@@ -43,12 +43,12 @@ type CurrentValueInfo struct {
 }
 
 type PerformanceMetrics struct {
-	ProfitLoss         decimal.Decimal `json:"profitLoss"`
-	ProfitLossPercent  decimal.Decimal `json:"profitLossPercent"`
-	ROI                decimal.Decimal `json:"roi"`
-	Status             string          `json:"status"` // profit, loss, break-even
-	HoldingPeriod      int             `json:"holdingPeriod"` // days
-	AnnualizedReturn   decimal.Decimal `json:"annualizedReturn"`
+	ProfitLoss        decimal.Decimal `json:"profitLoss"`
+	ProfitLossPercent decimal.Decimal `json:"profitLossPercent"`
+	ROI               decimal.Decimal `json:"roi"`
+	Status            string          `json:"status"`        // profit, loss, break-even
+	HoldingPeriod     int             `json:"holdingPeriod"` // days
+	AnnualizedReturn  decimal.Decimal `json:"annualizedReturn"`
 }
 
 type PerformanceAnalysis struct {
@@ -76,12 +76,12 @@ type PortfolioOverview struct {
 }
 
 type AssetTypeAllocation struct {
-	Count          int             `json:"count"`
-	TotalInvested  decimal.Decimal `json:"totalInvested"`
-	CurrentValue   decimal.Decimal `json:"currentValue"`
-	ProfitLoss     decimal.Decimal `json:"profitLoss"`
-	Percentage     decimal.Decimal `json:"percentage"` // % of total portfolio value
-	ROI            decimal.Decimal `json:"roi"`
+	Count         int             `json:"count"`
+	TotalInvested decimal.Decimal `json:"totalInvested"`
+	CurrentValue  decimal.Decimal `json:"currentValue"`
+	ProfitLoss    decimal.Decimal `json:"profitLoss"`
+	Percentage    decimal.Decimal `json:"percentage"` // % of total portfolio value
+	ROI           decimal.Decimal `json:"roi"`
 }
 
 type PerformersInfo struct {

@@ -1,0 +1,1059 @@
+{
+	"info": {
+		"name": "Monity — Finance Tracker API",
+		"description": "Complete API collection for Monity finance tracker backend.\n\n**Setup:**\n1. Set `base_url` variable (e.g. `http://localhost:8080` or `https://api-assetmonitor.my.id`)\n2. Call Login/Register — token is auto-saved to `token` variable\n3. All authenticated requests use `{{token}}` in Bearer header\n\n**Variable auto-capture:**\n- Login/Register → `token`, `refresh_token`\n- Create Asset → `asset_uuid`, `cash_asset_uuid` (if CASH)\n- Create Expense → `expense_uuid`\n- Create Income → `income_uuid`\n- Create Saving Goal → `saving_goal_uuid`\n\n**Default currency:** IDR (all endpoints default to IDR if no `?currency=` param)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "base_url", "value": "http://localhost:8080", "type": "string" },
+		{ "key": "token", "value": "", "type": "string" },
+		{ "key": "refresh_token", "value": "", "type": "string" },
+		{ "key": "asset_uuid", "value": "", "type": "string" },
+		{ "key": "cash_asset_uuid", "value": "", "type": "string" },
+		{ "key": "expense_uuid", "value": "", "type": "string" },
+		{ "key": "income_uuid", "value": "", "type": "string" },
+		{ "key": "saving_goal_uuid", "value": "", "type": "string" }
+	],
+	"item": [
+		{
+			"name": "Auth",
+			"description": "Register, Login, Refresh token, Me (current user), Logout. Me and Logout require Bearer token.",
+			"item": [
+				{
+					"name": "Register",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('token', json.data.Token);",
+									"  pm.collectionVariables.set('refresh_token', json.data.RefreshToken);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user@monity.com\",\n  \"password\": \"password123\",\n  \"name\": \"John Doe\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('token', json.data.Token);",
+									"  pm.collectionVariables.set('refresh_token', json.data.RefreshToken);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user@monity.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('token', json.data.Token);",
+									"  pm.collectionVariables.set('refresh_token', json.data.RefreshToken);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "refresh"]
+						}
+					}
+				},
+				{
+					"name": "Me",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "me"]
+						}
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refresh_token\": \"\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/logout",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "logout"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Activities",
+			"description": "List incomes and expenses grouped by day, month, or year. Single chronological list per group.\n\nQuery: group_by (day|month|year), date (empty|today|YYYY-MM-DD), tz (optional IANA timezone, e.g. Asia/Jakarta).\nPrefer date=YYYY-MM-DD for \"today\" from device (client sends that date).",
+			"item": [
+				{
+					"name": "List Activities (by day)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/activities",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "activities"]
+						}
+					}
+				},
+				{
+					"name": "List Activities (today)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/activities?group_by=day&date=today",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "activities"],
+							"query": [
+								{ "key": "group_by", "value": "day" },
+								{ "key": "date", "value": "today" }
+							]
+						}
+					}
+				},
+				{
+					"name": "List Activities (today, timezone)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/activities?group_by=day&date=today&tz=Asia/Jakarta",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "activities"],
+							"query": [
+								{ "key": "group_by", "value": "day" },
+								{ "key": "date", "value": "today" },
+								{ "key": "tz", "value": "Asia/Jakarta", "description": "IANA timezone" }
+							]
+						}
+					}
+				},
+				{
+					"name": "List Activities (by month)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/activities?group_by=month",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "activities"],
+							"query": [{ "key": "group_by", "value": "month" }]
+						}
+					}
+				},
+				{
+					"name": "List Activities (by year)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/activities?group_by=year",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "activities"],
+							"query": [{ "key": "group_by", "value": "year" }]
+						}
+					}
+				},
+				{
+					"name": "List Activities (specific date)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/activities?group_by=day&date=2026-02-14",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "activities"],
+							"query": [
+								{ "key": "group_by", "value": "day" },
+								{ "key": "date", "value": "2026-02-14", "description": "YYYY-MM-DD; prefer this for \"today\" from device" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Assets",
+			"description": "CRUD for assets. Types: CRYPTO, STOCK, CASH, LIVESTOCK, REAL_ESTATE, OTHER.\n\nAfter creating an asset, its UUID is saved to `asset_uuid` (and `cash_asset_uuid` if CASH).",
+			"item": [
+				{
+					"name": "Create Asset — CASH",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('asset_uuid', json.data.uuid);",
+									"  pm.collectionVariables.set('cash_asset_uuid', json.data.uuid);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Rekening BCA\",\n  \"type\": \"CASH\",\n  \"quantity\": 50000000,\n  \"purchasePrice\": 1,\n  \"purchaseDate\": \"2024-01-01T00:00:00Z\",\n  \"purchaseCurrency\": \"IDR\",\n  \"totalCost\": 50000000,\n  \"description\": \"Rekening utama untuk kebutuhan sehari-hari\",\n  \"notes\": \"Gaji masuk sini, belanja dari sini\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets"]
+						}
+					}
+				},
+				{
+					"name": "Create Asset — CRYPTO",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('asset_uuid', json.data.uuid);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Solana Investment\",\n  \"type\": \"CRYPTO\",\n  \"quantity\": 2,\n  \"symbol\": \"SOL\",\n  \"purchasePrice\": 150.5,\n  \"purchaseDate\": \"2025-06-15T00:00:00Z\",\n  \"purchaseCurrency\": \"IDR\",\n  \"totalCost\": 301,\n  \"transactionFee\": 1.5,\n  \"targetPrice\": 300,\n  \"description\": \"Long-term hold\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets"]
+						}
+					}
+				},
+				{
+					"name": "Create Asset — STOCK",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('asset_uuid', json.data.uuid);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"BRI Stock\",\n  \"type\": \"STOCK\",\n  \"quantity\": 14,\n  \"symbol\": \"BBRI\",\n  \"purchasePrice\": 4096.13,\n  \"purchaseDate\": \"2025-03-10T00:00:00Z\",\n  \"purchaseCurrency\": \"IDR\",\n  \"totalCost\": 57345.82,\n  \"transactionFee\": 15,\n  \"targetPrice\": 6000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets"]
+						}
+					}
+				},
+				{
+					"name": "Create Asset — LIVESTOCK",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('asset_uuid', json.data.uuid);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Sapi Ternak Bagi Hasil\",\n  \"type\": \"LIVESTOCK\",\n  \"quantity\": 3,\n  \"purchasePrice\": 10000000,\n  \"purchaseDate\": \"2025-01-01T00:00:00Z\",\n  \"purchaseCurrency\": \"IDR\",\n  \"totalCost\": 30000000,\n  \"maintenanceCost\": 500000,\n  \"estimatedYield\": 2000000,\n  \"yieldPeriod\": \"yearly\",\n  \"description\": \"Investasi ternak sapi bagi hasil\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets"]
+						}
+					}
+				},
+				{
+					"name": "Create Asset — REAL_ESTATE",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('asset_uuid', json.data.uuid);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Rumah Bandung\",\n  \"type\": \"REAL_ESTATE\",\n  \"quantity\": 1,\n  \"purchasePrice\": 500000000,\n  \"purchaseDate\": \"2023-06-01T00:00:00Z\",\n  \"purchaseCurrency\": \"IDR\",\n  \"totalCost\": 520000000,\n  \"transactionFee\": 20000000,\n  \"estimatedYield\": 24000000,\n  \"yieldPeriod\": \"yearly\",\n  \"description\": \"Rumah untuk disewakan\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets"]
+						}
+					}
+				},
+				{
+					"name": "List Assets",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets"]
+						}
+					}
+				},
+				{
+					"name": "Get Asset by UUID",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{asset_uuid}}", "description": "Asset UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Asset",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Rekening BCA — Updated\",\n  \"quantity\": 55000000,\n  \"notes\": \"Saldo diperbarui\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{asset_uuid}}", "description": "Asset UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Asset",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{asset_uuid}}", "description": "Asset UUID" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Asset Price History",
+			"description": "Manual price recording for non-digital assets (CASH, LIVESTOCK, REAL_ESTATE) and auto-fetch for CRYPTO/STOCK.\n\nUsed by portfolio to determine current value of non-digital assets.",
+			"item": [
+				{
+					"name": "Record Price (manual)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"price\": 12000000,\n  \"source\": \"market_estimate\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets/:uuid/prices",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets", ":uuid", "prices"],
+							"variable": [
+								{ "key": "uuid", "value": "{{asset_uuid}}", "description": "Asset UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Price History",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets/:uuid/prices?limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets", ":uuid", "prices"],
+							"query": [
+								{ "key": "limit", "value": "10" }
+							],
+							"variable": [
+								{ "key": "uuid", "value": "{{asset_uuid}}", "description": "Asset UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Fetch & Record Price (CRYPTO/STOCK only)",
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets/:uuid/prices/fetch",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets", ":uuid", "prices", "fetch"],
+							"variable": [
+								{ "key": "uuid", "value": "{{asset_uuid}}", "description": "Asset UUID (must be CRYPTO or STOCK)" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Expenses",
+			"description": "CRUD for expenses. Each expense is linked to a CASH asset via `assetUuid`.\n\n**Auto-update:** Creating/updating/deleting an expense automatically adjusts the linked CASH asset's balance.\n\nCategories: FOOD, TRANSPORT, HOUSING, UTILITIES, HEALTH, ENTERTAINMENT, SHOPPING, OTHER.",
+			"item": [
+				{
+					"name": "Create Expense",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('expense_uuid', json.data.uuid);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"assetUuid\": \"{{cash_asset_uuid}}\",\n  \"amount\": 150000,\n  \"category\": \"FOOD\",\n  \"note\": \"Belanja bulanan Indomaret\",\n  \"date\": \"2026-02-09T00:00:00Z\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/expenses",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "expenses"]
+						}
+					}
+				},
+				{
+					"name": "List Expenses",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/expenses",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "expenses"]
+						}
+					}
+				},
+				{
+					"name": "Get Expense by UUID",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/expenses/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "expenses", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{expense_uuid}}", "description": "Expense UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Expense",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"amount\": 200000,\n  \"note\": \"Belanja bulanan — revisi\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/expenses/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "expenses", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{expense_uuid}}", "description": "Expense UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Expense",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/expenses/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "expenses", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{expense_uuid}}", "description": "Expense UUID" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Incomes",
+			"description": "CRUD for incomes. Each income is linked to a CASH asset via `assetUuid`.\n\n**Auto-update:** Creating/updating/deleting an income automatically adjusts the linked CASH asset's balance.",
+			"item": [
+				{
+					"name": "Create Income",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('income_uuid', json.data.uuid);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"assetUuid\": \"{{cash_asset_uuid}}\",\n  \"amount\": 8000000,\n  \"source\": \"Gaji\",\n  \"note\": \"Gaji Februari 2026\",\n  \"date\": \"2026-02-01T00:00:00Z\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/incomes",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "incomes"]
+						}
+					}
+				},
+				{
+					"name": "List Incomes",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/incomes",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "incomes"]
+						}
+					}
+				},
+				{
+					"name": "Get Income by UUID",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/incomes/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "incomes", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{income_uuid}}", "description": "Income UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Income",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"amount\": 8500000,\n  \"note\": \"Gaji Februari — ada bonus\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/incomes/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "incomes", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{income_uuid}}", "description": "Income UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Income",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/incomes/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "incomes", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{income_uuid}}", "description": "Income UUID" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Saving Goals",
+			"description": "CRUD for saving goals. Track progress toward financial targets.",
+			"item": [
+				{
+					"name": "Create Saving Goal",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('saving_goal_uuid', json.data.uuid);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Dana Darurat 6 Bulan\",\n  \"targetAmount\": 30000000,\n  \"currentAmount\": 5000000,\n  \"deadline\": \"2026-12-31T00:00:00Z\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/saving-goals",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "saving-goals"]
+						}
+					}
+				},
+				{
+					"name": "List Saving Goals",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/saving-goals",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "saving-goals"]
+						}
+					}
+				},
+				{
+					"name": "Get Saving Goal by UUID",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/saving-goals/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "saving-goals", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{saving_goal_uuid}}", "description": "Saving Goal UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Saving Goal",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"currentAmount\": 10000000,\n  \"title\": \"Dana Darurat 6 Bulan — Progress\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/saving-goals/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "saving-goals", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{saving_goal_uuid}}", "description": "Saving Goal UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Saving Goal",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/saving-goals/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "saving-goals", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{saving_goal_uuid}}", "description": "Saving Goal UUID" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Prices (Public)",
+			"description": "Real-time price lookup. No auth required.\n\n- Crypto: CoinGecko (free, no API key). Supported: BTC, ETH, SOL, USDT, BNB, XRP, ADA, DOGE, etc.\n- Stock: Yahoo Finance (free). IDX stocks auto-appended .JK suffix.\n\nDefault currency: IDR.",
+			"item": [
+				{
+					"name": "Get Crypto Price",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/v1/prices/crypto/:symbol",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "prices", "crypto", ":symbol"],
+							"variable": [
+								{ "key": "symbol", "value": "SOL", "description": "Crypto ticker: BTC, ETH, SOL, USDT, BNB, etc." }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Crypto Price (with currency)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/v1/prices/crypto/:symbol?currency=USD",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "prices", "crypto", ":symbol"],
+							"query": [
+								{ "key": "currency", "value": "USD" }
+							],
+							"variable": [
+								{ "key": "symbol", "value": "BTC", "description": "Crypto ticker: BTC, ETH, SOL, USDT, BNB, etc." }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Stock Price",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/v1/prices/stock/:symbol",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "prices", "stock", ":symbol"],
+							"variable": [
+								{ "key": "symbol", "value": "BBRI", "description": "Stock ticker: BBRI, BBCA, TLKM, etc. IDX stocks auto-appended .JK" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Stock Price (with currency)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/v1/prices/stock/:symbol?currency=USD",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "prices", "stock", ":symbol"],
+							"query": [
+								{ "key": "currency", "value": "USD" }
+							],
+							"variable": [
+								{ "key": "symbol", "value": "BBCA", "description": "Stock ticker: BBRI, BBCA, TLKM, etc." }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Portfolio",
+			"description": "View portfolio value with live prices for CRYPTO/STOCK and manual prices for CASH/LIVESTOCK/REAL_ESTATE.\n\nPrice sources: `coingecko`, `yahoo`, `manual_update`, `purchase_price`, `cash_unit`, `fallback`.\n\nDefault currency: IDR.",
+			"item": [
+				{
+					"name": "Get Portfolio",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/portfolio",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "portfolio"]
+						}
+					}
+				},
+				{
+					"name": "Get Portfolio (with currency)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/portfolio?currency=USD",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "portfolio"],
+							"query": [
+								{ "key": "currency", "value": "USD" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Single Asset Value",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/portfolio/assets/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "portfolio", "assets", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{asset_uuid}}", "description": "Asset UUID" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Performance",
+			"description": "Performance analytics: profit/loss, ROI, allocation, top performers.\n\nDefault currency: IDR.",
+			"item": [
+				{
+					"name": "Get Asset Performance",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/assets/:uuid/performance",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assets", ":uuid", "performance"],
+							"variable": [
+								{ "key": "uuid", "value": "{{asset_uuid}}", "description": "Asset UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Portfolio Performance",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/portfolio/performance",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "portfolio", "performance"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Insights",
+			"description": "Financial insights: cashflow summary and financial overview.",
+			"item": [
+				{
+					"name": "Cashflow Summary (current month)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/insights/cashflow",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "insights", "cashflow"]
+						}
+					}
+				},
+				{
+					"name": "Cashflow Summary (specific month)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/insights/cashflow?month=2026-02",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "insights", "cashflow"],
+							"query": [
+								{ "key": "month", "value": "2026-02" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Financial Overview",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/insights/overview",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "insights", "overview"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Health",
+			"description": "Server health check endpoints. No auth required.",
+			"item": [
+				{
+					"name": "Root",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/",
+							"host": ["{{base_url}}"],
+							"path": [""]
+						}
+					}
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						}
+					}
+				}
+			]
+		}
+	]
+}

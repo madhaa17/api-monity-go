@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"monity/internal/core/port"
+	"monity/internal/models"
 )
 
 const (
@@ -16,11 +17,13 @@ const (
 	groupByYear  = "year"
 )
 
+// ActivityService implements business logic for listing and grouping user activities (incomes and expenses).
 type ActivityService struct {
 	expenseRepo port.ExpenseRepository
 	incomeRepo  port.IncomeRepository
 }
 
+// NewActivityService returns a new ActivityService with the given repositories.
 func NewActivityService(expenseRepo port.ExpenseRepository, incomeRepo port.IncomeRepository) port.ActivityService {
 	return &ActivityService{
 		expenseRepo: expenseRepo,
@@ -28,7 +31,8 @@ func NewActivityService(expenseRepo port.ExpenseRepository, incomeRepo port.Inco
 	}
 }
 
-func (s *ActivityService) ListActivities(ctx context.Context, userID int64, groupBy string) (*port.ActivityResponse, error) {
+// ListActivities returns activities for the user, grouped by day, month, or year, and optionally filtered by date and timezone.
+func (s *ActivityService) ListActivities(ctx context.Context, userID int64, groupBy string, dateFilter string, timezone string) (*port.ActivityResponse, error) {
 	groupBy = normalizeGroupBy(groupBy)
 
 	expenses, err := s.expenseRepo.ListByUserID(ctx, userID)
@@ -38,6 +42,18 @@ func (s *ActivityService) ListActivities(ctx context.Context, userID int64, grou
 	incomes, err := s.incomeRepo.ListByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list incomes: %w", err)
+	}
+
+	var loc *time.Location
+	if timezone != "" {
+		if l, err := time.LoadLocation(timezone); err == nil {
+			loc = l
+		}
+	}
+
+	if dateFilter != "" {
+		incomes = filterIncomesByDate(incomes, dateFilter, loc)
+		expenses = filterExpensesByDate(expenses, dateFilter, loc)
 	}
 
 	// group key -> slice of items (will merge and sort per group)
@@ -93,10 +109,44 @@ func (s *ActivityService) ListActivities(ctx context.Context, userID int64, grou
 	return &port.ActivityResponse{Groups: groups}, nil
 }
 
+func dateMatches(t time.Time, dateFilter string, loc *time.Location) bool {
+	if loc == nil {
+		loc = time.Local
+	}
+	return t.In(loc).Format("2006-01-02") == dateFilter
+}
+
+func filterIncomesByDate(incomes []models.Income, dateFilter string, loc *time.Location) []models.Income {
+	if dateFilter == "" {
+		return incomes
+	}
+	out := make([]models.Income, 0, len(incomes))
+	for i := range incomes {
+		if dateMatches(incomes[i].Date, dateFilter, loc) {
+			out = append(out, incomes[i])
+		}
+	}
+	return out
+}
+
+func filterExpensesByDate(expenses []models.Expense, dateFilter string, loc *time.Location) []models.Expense {
+	if dateFilter == "" {
+		return expenses
+	}
+	out := make([]models.Expense, 0, len(expenses))
+	for i := range expenses {
+		if dateMatches(expenses[i].Date, dateFilter, loc) {
+			out = append(out, expenses[i])
+		}
+	}
+	return out
+}
+
 func normalizeGroupBy(g string) string {
-	switch strings.ToLower(strings.TrimSpace(g)) {
+	normalized := strings.ToLower(strings.TrimSpace(g))
+	switch normalized {
 	case groupByMonth, groupByYear:
-		return strings.ToLower(strings.TrimSpace(g))
+		return normalized
 	default:
 		return groupByDay
 	}

@@ -13,8 +13,8 @@ import (
 )
 
 type AssetPriceHistoryService struct {
-	historyRepo port.AssetPriceHistoryRepository
-	assetRepo   port.AssetRepository
+	historyRepo  port.AssetPriceHistoryRepository
+	assetRepo    port.AssetRepository
 	priceService port.PriceService
 }
 

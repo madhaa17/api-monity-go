@@ -29,12 +29,12 @@ func (r *AssetPriceHistoryRepo) Create(ctx context.Context, history *models.Asse
 
 func (r *AssetPriceHistoryRepo) ListByAssetID(ctx context.Context, assetID int64, limit int) ([]models.AssetPriceHistory, error) {
 	var histories []models.AssetPriceHistory
-	
+
 	query := r.db.WithContext(ctx).Where("asset_id = ?", assetID).Order("recorded_at desc")
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
-	
+
 	result := query.Find(&histories)
 	if result.Error != nil {
 		return nil, fmt.Errorf("list price history: %w", result.Error)

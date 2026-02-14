@@ -36,3 +36,4 @@ Thumbs.db
 # Local knowledge / docs (do not push to GitHub)
 knowledge/
 .knowledge/*
+.agents/

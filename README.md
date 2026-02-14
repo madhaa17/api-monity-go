@@ -7,6 +7,7 @@ Backend API for a personal finance tracker: assets (crypto, stocks), income, exp
 - **Go 1.24+** — stdlib `net/http`, no framework
 - **PostgreSQL** — via GORM
 - **Redis** — optional; used for price cache (crypto/stock) to reduce external API calls and improve response time
+- **Price sources** — CoinGecko (crypto), Yahoo Finance (stock); both free, no API key
 - **JWT** — auth (Bearer token)
 - **Decimal** — `shopspring/decimal` for money/quantity values
 
@@ -42,7 +43,7 @@ backend/
 
    ```bash
    cp .env.example .env
-   # Edit .env: DATABASE_*, JWT_SECRET, CRYPTO_PRICE_API_KEY (optional)
+   # Edit .env: DATABASE_*, JWT_SECRET (crypto/stock prices use CoinGecko & Yahoo Finance, no API key needed)
    ```
 
 3. **Database**
@@ -70,21 +71,21 @@ backend/
 | Area         | Example endpoints                      | Auth   |
 |-------------|-----------------------------------------|--------|
 | Root        | `GET /` → `{"status":"ok"}`             | —      |
-| Health      | `GET /health` → status + DB            | —      |
+| Health      | `GET /health` → status + DB             | —      |
 | Auth        | `POST /api/v1/auth/register`, `.../login`, `.../refresh`, `GET .../me`, `POST .../logout` | Bearer (me, logout) |
+| Activities  | `GET /api/v1/activities?group_by=day&date=YYYY-MM-DD` — incomes + expenses grouped (day/month/year), optional `date`, `tz` | Bearer |
 | Assets      | CRUD assets (crypto, stock, etc.)       | Bearer |
 | Incomes     | CRUD income                             | Bearer |
 | Expenses    | CRUD expenses                           | Bearer |
 | Saving goals| CRUD saving goals                       | Bearer |
-| Price       | Crypto/stock prices (external API)      | Bearer |
+| Price       | Crypto (CoinGecko) / stock (Yahoo Finance) — free, no API key | Bearer |
 | Portfolio   | Portfolio summary                       | Bearer |
 | Performance | Asset performance                       | Bearer |
 | Insight     | Financial insights                      | Bearer |
 
 Protected routes require header: `Authorization: Bearer <token>`.
 
-- **Postman:** Import [docs/postman_collection.json](docs/postman_collection.json). Set `token` (dari response Login) untuk request Me dan Logout.
-- **cURL:** Contoh lengkap ada di [docs/curl-examples.md](docs/curl-examples.md).
+- **Postman:** Import [docs/Monity_API.postman_collection.json](docs/Monity_API.postman_collection.json). Login/Register auto-save `token`;
 
 ## Security & middleware
 
@@ -97,15 +98,18 @@ Protected routes require header: `Authorization: Bearer <token>`.
 
 | Variable               | Description                    |
 |------------------------|--------------------------------|
+| `APP_PORT`             | Server port (default 8080)     |
 | `DATABASE_HOST`, `*`   | PostgreSQL connection         |
 | `JWT_SECRET`           | Secret for signing JWT        |
-| `CRYPTO_PRICE_API_KEY` | CoinMarketCap API key (optional) |
+| `STOCK_PRICE_API`      | Yahoo Finance base URL (optional override; default in .env.example) |
 | `RATE_LIMIT_TTL`       | Rate limit window (seconds)   |
 | `RATE_LIMIT_LIMIT`     | Max requests per window per IP |
 | `CORS_ALLOWED_ORIGINS` | `*` or comma-separated origins |
-| `REDIS_HOST`          | Redis host for cache (empty = in-memory cache) |
+| `REDIS_HOST`           | Redis host for cache (empty = in-memory cache) |
 | `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB` | Redis connection |
-| `REDIS_TTL_PRICE`     | Price cache TTL in seconds |
+| `REDIS_TTL_PRICE`      | Price cache TTL in seconds    |
+
+**Prices:** Crypto prices use **CoinGecko** (free, no API key). Stock prices use **Yahoo Finance** (free, no API key; IDX symbols get `.JK` suffix). See `.env.example` for `STOCK_PRICE_API` if you need to override the Yahoo base URL.
 
 If `REDIS_HOST` is set, the app uses Redis for caching crypto/stock prices and FX rates, improving performance and sharing cache across instances. Otherwise, an in-memory cache is used (single instance only).
 

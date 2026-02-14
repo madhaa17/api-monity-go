@@ -38,7 +38,7 @@ func (h *SavingGoalHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	goal, err := h.svc.CreateSavingGoal(r.Context(), userID, req)
 	if err != nil {
-		if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "negative") {
+		if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "negative") || strings.Contains(err.Error(), "must be") {
 			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
@@ -116,7 +116,7 @@ func (h *SavingGoalHandler) Update(w http.ResponseWriter, r *http.Request) {
 			response.ErrorWithLog(w, r, http.StatusNotFound, "saving goal not found", nil)
 			return
 		}
-		if strings.Contains(err.Error(), "empty") || strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "negative") {
+		if strings.Contains(err.Error(), "empty") || strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "negative") || strings.Contains(err.Error(), "must be") {
 			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}

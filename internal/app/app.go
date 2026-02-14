@@ -95,7 +95,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 		middleware.RequestLogger(
 			middleware.CORS(cfg.Security.CORSAllowedOrigins)(
 				middleware.SecurityHeaders(
-					rateLimit.Handler(mux),
+					middleware.BodyLimit(middleware.MaxBodyBytes)(rateLimit.Handler(mux)),
 				),
 			),
 		),

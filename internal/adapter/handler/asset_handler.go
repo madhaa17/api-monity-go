@@ -38,6 +38,10 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	asset, err := h.svc.CreateAsset(r.Context(), userID, req)
 	if err != nil {
+		if strings.Contains(err.Error(), "must be") {
+			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
 		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to create asset", err.Error())
 		return
 	}
@@ -110,6 +114,10 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err.Error() == "asset not found" {
 			response.ErrorWithLog(w, r, http.StatusNotFound, "asset not found", nil)
+			return
+		}
+		if strings.Contains(err.Error(), "must be") {
+			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
 		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to update asset", err.Error())

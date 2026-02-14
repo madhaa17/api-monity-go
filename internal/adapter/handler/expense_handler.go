@@ -38,7 +38,7 @@ func (h *ExpenseHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	expense, err := h.svc.CreateExpense(r.Context(), userID, req)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "positive") {
+		if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "must be") {
 			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
@@ -116,7 +116,7 @@ func (h *ExpenseHandler) Update(w http.ResponseWriter, r *http.Request) {
 			response.ErrorWithLog(w, r, http.StatusNotFound, "expense not found", nil)
 			return
 		}
-		if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "positive") {
+		if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "must be") {
 			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}

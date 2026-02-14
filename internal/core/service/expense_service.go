@@ -9,6 +9,7 @@ import (
 
 	"monity/internal/core/port"
 	"monity/internal/models"
+	"monity/internal/pkg/validation"
 
 	"github.com/shopspring/decimal"
 )
@@ -46,6 +47,11 @@ func (s *ExpenseService) CreateExpense(ctx context.Context, userID int64, req po
 	}
 	if !isValidExpenseCategory(req.Category) {
 		return nil, errors.New("invalid expense category")
+	}
+	if req.Note != nil {
+		if err := validation.CheckMaxLen(*req.Note, validation.MaxNoteLen); err != nil {
+			return nil, fmt.Errorf("note %w", err)
+		}
 	}
 
 	asset, err := s.lookupCashAsset(ctx, req.AssetUUID, userID)
@@ -124,6 +130,9 @@ func (s *ExpenseService) UpdateExpense(ctx context.Context, userID int64, uuid s
 		expense.Category = *req.Category
 	}
 	if req.Note != nil {
+		if err := validation.CheckMaxLen(*req.Note, validation.MaxNoteLen); err != nil {
+			return nil, fmt.Errorf("note %w", err)
+		}
 		expense.Note = req.Note
 	}
 	if req.Date != nil {

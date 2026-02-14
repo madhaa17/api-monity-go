@@ -12,6 +12,7 @@ import (
 	"monity/internal/core/port"
 	"monity/internal/models"
 	"monity/internal/pkg/cache"
+	"monity/internal/pkg/validation"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -42,6 +43,18 @@ func newJTI() (string, error) {
 }
 
 func (s *AuthService) Register(ctx context.Context, req port.RegistryRequest) (*port.AuthResponse, error) {
+	if !validation.ValidEmail(req.Email) {
+		return nil, errors.New("invalid email format")
+	}
+	if ok, msg := validation.ValidPassword(req.Password); !ok {
+		return nil, errors.New(msg)
+	}
+	if err := validation.CheckMaxLen(req.Email, validation.MaxEmailLen); err != nil {
+		return nil, fmt.Errorf("email %w", err)
+	}
+	if err := validation.CheckMaxLen(req.Name, validation.MaxNameLen); err != nil {
+		return nil, fmt.Errorf("name %w", err)
+	}
 	// Check if user exists
 	existingUser, err := s.repo.GetByEmail(ctx, req.Email)
 	if err != nil {
@@ -85,6 +98,9 @@ func (s *AuthService) Register(ctx context.Context, req port.RegistryRequest) (*
 }
 
 func (s *AuthService) Login(ctx context.Context, req port.LoginRequest) (*port.AuthResponse, error) {
+	if !validation.ValidEmail(req.Email) {
+		return nil, errors.New("invalid email format")
+	}
 	user, err := s.repo.GetByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)

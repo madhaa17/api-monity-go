@@ -44,7 +44,7 @@ func (h *AssetPriceHistoryHandler) RecordPrice(w http.ResponseWriter, r *http.Re
 			response.ErrorWithLog(w, r, http.StatusNotFound, "asset not found", nil)
 			return
 		}
-		if strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "required") {
+		if strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "must be") {
 			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}

@@ -9,6 +9,7 @@ import (
 
 	"monity/internal/core/port"
 	"monity/internal/models"
+	"monity/internal/pkg/validation"
 
 	"github.com/shopspring/decimal"
 )
@@ -25,6 +26,9 @@ func (s *SavingGoalService) CreateSavingGoal(ctx context.Context, userID int64, 
 	// Validate title
 	if strings.TrimSpace(req.Title) == "" {
 		return nil, errors.New("title is required")
+	}
+	if err := validation.CheckMaxLen(req.Title, validation.MaxTitleLen); err != nil {
+		return nil, fmt.Errorf("title %w", err)
 	}
 
 	// Validate target amount
@@ -86,6 +90,9 @@ func (s *SavingGoalService) UpdateSavingGoal(ctx context.Context, userID int64, 
 	if req.Title != nil {
 		if strings.TrimSpace(*req.Title) == "" {
 			return nil, errors.New("title cannot be empty")
+		}
+		if err := validation.CheckMaxLen(*req.Title, validation.MaxTitleLen); err != nil {
+			return nil, fmt.Errorf("title %w", err)
 		}
 		goal.Title = strings.TrimSpace(*req.Title)
 	}

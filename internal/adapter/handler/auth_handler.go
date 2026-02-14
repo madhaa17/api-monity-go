@@ -42,6 +42,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			response.ErrorWithLog(w, r, http.StatusConflict, "registration failed", err.Error())
 			return
 		}
+		if err.Error() == "invalid email format" || strings.HasPrefix(err.Error(), "password ") || strings.HasPrefix(err.Error(), "name must be") || strings.HasPrefix(err.Error(), "email must be") {
+			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
 		slog.Error("register_error", "email", req.Email, "error", err)
 		response.ErrorWithLog(w, r, http.StatusInternalServerError, "internal server error", nil)
 		return
@@ -70,6 +74,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		if err.Error() == "invalid email or password" {
 			slog.Warn("login_failed", "email", req.Email, "reason", "invalid email or password")
 			response.ErrorWithLog(w, r, http.StatusUnauthorized, "login failed", "invalid email or password")
+			return
+		}
+		if err.Error() == "invalid email format" {
+			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
 		slog.Error("login_error", "email", req.Email, "error", err)

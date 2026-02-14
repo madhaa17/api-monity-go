@@ -38,7 +38,7 @@ func (h *IncomeHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	income, err := h.svc.CreateIncome(r.Context(), userID, req)
 	if err != nil {
-		if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "positive") {
+		if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "must be") {
 			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}
@@ -116,7 +116,7 @@ func (h *IncomeHandler) Update(w http.ResponseWriter, r *http.Request) {
 			response.ErrorWithLog(w, r, http.StatusNotFound, "income not found", nil)
 			return
 		}
-		if strings.Contains(err.Error(), "empty") || strings.Contains(err.Error(), "positive") {
+		if strings.Contains(err.Error(), "empty") || strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "must be") {
 			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
 			return
 		}

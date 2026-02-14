@@ -8,6 +8,7 @@ import (
 
 	"monity/internal/core/port"
 	"monity/internal/models"
+	"monity/internal/pkg/validation"
 
 	"github.com/shopspring/decimal"
 )
@@ -37,6 +38,9 @@ func (s *AssetPriceHistoryService) RecordPrice(ctx context.Context, userID int64
 	}
 	if req.Source == "" {
 		return nil, errors.New("source is required")
+	}
+	if err := validation.CheckMaxLen(req.Source, validation.MaxSourceLen); err != nil {
+		return nil, fmt.Errorf("source %w", err)
 	}
 
 	// Get asset to verify ownership and get ID

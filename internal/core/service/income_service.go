@@ -9,6 +9,7 @@ import (
 
 	"monity/internal/core/port"
 	"monity/internal/models"
+	"monity/internal/pkg/validation"
 
 	"github.com/shopspring/decimal"
 )
@@ -46,6 +47,14 @@ func (s *IncomeService) CreateIncome(ctx context.Context, userID int64, req port
 	}
 	if strings.TrimSpace(req.Source) == "" {
 		return nil, errors.New("source is required")
+	}
+	if err := validation.CheckMaxLen(req.Source, validation.MaxSourceLen); err != nil {
+		return nil, fmt.Errorf("source %w", err)
+	}
+	if req.Note != nil {
+		if err := validation.CheckMaxLen(*req.Note, validation.MaxNoteLen); err != nil {
+			return nil, fmt.Errorf("note %w", err)
+		}
 	}
 
 	asset, err := s.lookupCashAsset(ctx, req.AssetUUID, userID)
@@ -121,9 +130,15 @@ func (s *IncomeService) UpdateIncome(ctx context.Context, userID int64, uuid str
 		if strings.TrimSpace(*req.Source) == "" {
 			return nil, errors.New("source cannot be empty")
 		}
+		if err := validation.CheckMaxLen(*req.Source, validation.MaxSourceLen); err != nil {
+			return nil, fmt.Errorf("source %w", err)
+		}
 		income.Source = *req.Source
 	}
 	if req.Note != nil {
+		if err := validation.CheckMaxLen(*req.Note, validation.MaxNoteLen); err != nil {
+			return nil, fmt.Errorf("note %w", err)
+		}
 		income.Note = req.Note
 	}
 	if req.Date != nil {

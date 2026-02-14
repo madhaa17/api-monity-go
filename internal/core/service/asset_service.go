@@ -8,6 +8,7 @@ import (
 
 	"monity/internal/core/port"
 	"monity/internal/models"
+	"monity/internal/pkg/validation"
 
 	"github.com/shopspring/decimal"
 )
@@ -21,6 +22,29 @@ func NewAssetService(repo port.AssetRepository) port.AssetService {
 }
 
 func (s *AssetService) CreateAsset(ctx context.Context, userID int64, req port.CreateAssetRequest) (*models.Asset, error) {
+	if err := validation.CheckMaxLen(req.Name, validation.MaxAssetNameLen); err != nil {
+		return nil, fmt.Errorf("name %w", err)
+	}
+	if req.Symbol != nil {
+		if err := validation.CheckMaxLen(*req.Symbol, validation.MaxSymbolLen); err != nil {
+			return nil, fmt.Errorf("symbol %w", err)
+		}
+	}
+	if req.Description != nil {
+		if err := validation.CheckMaxLen(*req.Description, validation.MaxDescriptionLen); err != nil {
+			return nil, fmt.Errorf("description %w", err)
+		}
+	}
+	if req.Notes != nil {
+		if err := validation.CheckMaxLen(*req.Notes, validation.MaxNoteLen); err != nil {
+			return nil, fmt.Errorf("notes %w", err)
+		}
+	}
+	if req.YieldPeriod != nil {
+		if err := validation.CheckMaxLen(*req.YieldPeriod, validation.MaxYieldPeriodLen); err != nil {
+			return nil, fmt.Errorf("yieldPeriod %w", err)
+		}
+	}
 	// Parse purchase date
 	purchaseDate := time.Now()
 	if req.PurchaseDate != "" {
@@ -126,6 +150,9 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 
 	// Basic fields
 	if req.Name != nil {
+		if err := validation.CheckMaxLen(*req.Name, validation.MaxAssetNameLen); err != nil {
+			return nil, fmt.Errorf("name %w", err)
+		}
 		asset.Name = *req.Name
 	}
 	if req.Type != nil {
@@ -135,6 +162,9 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 		asset.Quantity = decimal.NewFromFloat(*req.Quantity)
 	}
 	if req.Symbol != nil {
+		if err := validation.CheckMaxLen(*req.Symbol, validation.MaxSymbolLen); err != nil {
+			return nil, fmt.Errorf("symbol %w", err)
+		}
 		asset.Symbol = req.Symbol
 	}
 
@@ -184,14 +214,23 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 		asset.EstimatedYield = &yield
 	}
 	if req.YieldPeriod != nil {
+		if err := validation.CheckMaxLen(*req.YieldPeriod, validation.MaxYieldPeriodLen); err != nil {
+			return nil, fmt.Errorf("yieldPeriod %w", err)
+		}
 		asset.YieldPeriod = req.YieldPeriod
 	}
 
 	// Documentation
 	if req.Description != nil {
+		if err := validation.CheckMaxLen(*req.Description, validation.MaxDescriptionLen); err != nil {
+			return nil, fmt.Errorf("description %w", err)
+		}
 		asset.Description = req.Description
 	}
 	if req.Notes != nil {
+		if err := validation.CheckMaxLen(*req.Notes, validation.MaxNoteLen); err != nil {
+			return nil, fmt.Errorf("notes %w", err)
+		}
 		asset.Notes = req.Notes
 	}
 

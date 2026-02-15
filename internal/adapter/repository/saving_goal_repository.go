@@ -39,13 +39,21 @@ func (r *SavingGoalRepo) GetByUUID(ctx context.Context, uuid string, userID int6
 	return &goal, nil
 }
 
-func (r *SavingGoalRepo) ListByUserID(ctx context.Context, userID int64) ([]models.SavingGoal, error) {
-	var goals []models.SavingGoal
-	result := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at desc").Find(&goals)
-	if result.Error != nil {
-		return nil, fmt.Errorf("list saving goals: %w", result.Error)
+func (r *SavingGoalRepo) ListByUserID(ctx context.Context, userID int64, page, limit int) ([]models.SavingGoal, int64, error) {
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&models.SavingGoal{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count saving goals: %w", err)
 	}
-	return goals, nil
+	var goals []models.SavingGoal
+	offset := (page - 1) * limit
+	if offset < 0 {
+		offset = 0
+	}
+	result := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at desc").Offset(offset).Limit(limit).Find(&goals)
+	if result.Error != nil {
+		return nil, 0, fmt.Errorf("list saving goals: %w", result.Error)
+	}
+	return goals, total, nil
 }
 
 func (r *SavingGoalRepo) Update(ctx context.Context, goal *models.SavingGoal) error {

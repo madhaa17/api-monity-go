@@ -153,7 +153,7 @@ func (s *PerformanceService) GetAssetPerformance(ctx context.Context, userID int
 
 func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID int64, currency string) (*port.PortfolioPerformanceResponse, error) {
 	// Get all user assets
-	assets, err := s.assetRepo.ListByUserID(ctx, userID)
+	assets, _, err := s.assetRepo.ListByUserID(ctx, userID, 1, 10000)
 	if err != nil {
 		return nil, fmt.Errorf("list assets: %w", err)
 	}

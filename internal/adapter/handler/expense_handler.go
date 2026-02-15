@@ -55,14 +55,14 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
-
-	expenses, err := h.svc.ListExpenses(r.Context(), userID)
+	page, limit := parsePageLimit(r, 1, 20, 100)
+	dateFrom, dateTo := parseDateFilter(r)
+	expenses, meta, err := h.svc.ListExpenses(r.Context(), userID, dateFrom, dateTo, page, limit)
 	if err != nil {
 		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to list expenses", err.Error())
 		return
 	}
-
-	response.Success(w, http.StatusOK, "expenses retrieved", expenses)
+	response.Success(w, http.StatusOK, "expenses retrieved", port.ListResponse{Items: expenses, Meta: meta})
 }
 
 func (h *ExpenseHandler) Get(w http.ResponseWriter, r *http.Request) {

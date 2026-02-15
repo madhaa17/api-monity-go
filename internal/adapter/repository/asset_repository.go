@@ -51,13 +51,21 @@ func (r *AssetRepo) GetByUUID(ctx context.Context, uuid string, userID int64) (*
 	return &asset, nil
 }
 
-func (r *AssetRepo) ListByUserID(ctx context.Context, userID int64) ([]models.Asset, error) {
-	var assets []models.Asset
-	result := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at desc").Find(&assets)
-	if result.Error != nil {
-		return nil, fmt.Errorf("list assets: %w", result.Error)
+func (r *AssetRepo) ListByUserID(ctx context.Context, userID int64, page, limit int) ([]models.Asset, int64, error) {
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&models.Asset{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count assets: %w", err)
 	}
-	return assets, nil
+	var assets []models.Asset
+	offset := (page - 1) * limit
+	if offset < 0 {
+		offset = 0
+	}
+	result := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at desc").Offset(offset).Limit(limit).Find(&assets)
+	if result.Error != nil {
+		return nil, 0, fmt.Errorf("list assets: %w", result.Error)
+	}
+	return assets, total, nil
 }
 
 func (r *AssetRepo) Update(ctx context.Context, asset *models.Asset) error {

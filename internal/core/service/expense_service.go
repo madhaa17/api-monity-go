@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"monity/internal/core/port"
 	"monity/internal/models"
@@ -96,15 +97,29 @@ func (s *ExpenseService) GetExpense(ctx context.Context, userID int64, uuid stri
 	return expense, nil
 }
 
-func (s *ExpenseService) ListExpenses(ctx context.Context, userID int64) ([]models.Expense, error) {
-	expenses, err := s.repo.ListByUserID(ctx, userID)
+func (s *ExpenseService) ListExpenses(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Expense, port.ListMeta, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	expenses, total, err := s.repo.ListByUserID(ctx, userID, dateFrom, dateTo, page, limit)
 	if err != nil {
-		return nil, fmt.Errorf("list expenses: %w", err)
+		return nil, port.ListMeta{}, fmt.Errorf("list expenses: %w", err)
 	}
 	if expenses == nil {
-		return []models.Expense{}, nil
+		expenses = []models.Expense{}
 	}
-	return expenses, nil
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+	if totalPages < 0 {
+		totalPages = 0
+	}
+	meta := port.ListMeta{Total: total, Page: page, Limit: limit, TotalPages: totalPages}
+	return expenses, meta, nil
 }
 
 func (s *ExpenseService) UpdateExpense(ctx context.Context, userID int64, uuid string, req port.UpdateExpenseRequest) (*models.Expense, error) {

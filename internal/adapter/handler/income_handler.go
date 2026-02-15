@@ -55,14 +55,14 @@ func (h *IncomeHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
-
-	incomes, err := h.svc.ListIncomes(r.Context(), userID)
+	page, limit := parsePageLimit(r, 1, 20, 100)
+	dateFrom, dateTo := parseDateFilter(r)
+	incomes, meta, err := h.svc.ListIncomes(r.Context(), userID, dateFrom, dateTo, page, limit)
 	if err != nil {
 		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to list incomes", err.Error())
 		return
 	}
-
-	response.Success(w, http.StatusOK, "incomes retrieved", incomes)
+	response.Success(w, http.StatusOK, "incomes retrieved", port.ListResponse{Items: incomes, Meta: meta})
 }
 
 func (h *IncomeHandler) Get(w http.ResponseWriter, r *http.Request) {

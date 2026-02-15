@@ -69,15 +69,29 @@ func (s *SavingGoalService) GetSavingGoal(ctx context.Context, userID int64, uui
 	return goal, nil
 }
 
-func (s *SavingGoalService) ListSavingGoals(ctx context.Context, userID int64) ([]models.SavingGoal, error) {
-	goals, err := s.repo.ListByUserID(ctx, userID)
+func (s *SavingGoalService) ListSavingGoals(ctx context.Context, userID int64, page, limit int) ([]models.SavingGoal, port.ListMeta, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	goals, total, err := s.repo.ListByUserID(ctx, userID, page, limit)
 	if err != nil {
-		return nil, fmt.Errorf("list saving goals: %w", err)
+		return nil, port.ListMeta{}, fmt.Errorf("list saving goals: %w", err)
 	}
 	if goals == nil {
-		return []models.SavingGoal{}, nil
+		goals = []models.SavingGoal{}
 	}
-	return goals, nil
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+	if totalPages < 0 {
+		totalPages = 0
+	}
+	meta := port.ListMeta{Total: total, Page: page, Limit: limit, TotalPages: totalPages}
+	return goals, meta, nil
 }
 
 func (s *SavingGoalService) UpdateSavingGoal(ctx context.Context, userID int64, uuid string, req port.UpdateSavingGoalRequest) (*models.SavingGoal, error) {

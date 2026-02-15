@@ -1,0 +1,1229 @@
+openapi: 3.0.3
+info:
+  title: Monity Finance Tracker API
+  description: Backend API for the finance tracker frontend. All dates/times are ISO 8601 / RFC3339. Authenticated endpoints require Bearer JWT.
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+    description: API v1 base path (prepend your host, e.g. https://api.example.com)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: auth
+    description: Registration, login, refresh, me, logout
+  - name: activities
+    description: Activity feed
+  - name: assets
+    description: Assets CRUD and price history
+  - name: incomes
+    description: Income entries
+  - name: expenses
+    description: Expense entries
+  - name: saving-goals
+    description: Saving goals
+  - name: portfolio
+    description: Portfolio and asset values (supports currency)
+  - name: performance
+    description: Asset and portfolio performance (supports currency)
+  - name: insights
+    description: Cashflow and financial overview
+  - name: prices
+    description: External crypto/stock prices and charts (public, optional auth)
+
+paths:
+  # --- Auth (no auth required for register, login, refresh) ---
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Register a new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registration successful
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessAuthData' }
+        '400':
+          description: Invalid or missing fields
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessAuthData' }
+        '400':
+          description: Bad request
+        '401':
+          description: Invalid email or password
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string, description: JWT refresh token }
+      responses:
+        '200':
+          description: New tokens
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessAuthData' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized or invalid refresh token
+
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Get current user
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Unauthorized
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Logout (invalidate tokens)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: Logged out
+        '401':
+          description: Unauthorized
+
+  # --- Activities ---
+  /activities:
+    get:
+      tags: [activities]
+      summary: List activities (income/expense feed)
+      parameters:
+        - name: group_by
+          in: query
+          schema: { type: string, enum: [day, week, month] }
+        - name: date
+          in: query
+          schema: { type: string, format: date }
+        - name: tz
+          in: query
+          schema: { type: string, description: IANA timezone }
+      responses:
+        '200':
+          description: Grouped activities
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { type: object, description: Grouped activities }
+        '401':
+          description: Unauthorized
+
+  # --- Assets ---
+  /assets:
+    get:
+      tags: [assets]
+      summary: List assets (paginated)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated list of assets
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ListResponseAsset' }
+        '401':
+          description: Unauthorized
+    post:
+      tags: [assets]
+      summary: Create asset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAssetRequest' }
+      responses:
+        '201':
+          description: Asset created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Asset' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+
+  /assets/{uuid}:
+    get:
+      tags: [assets]
+      summary: Get asset by UUID
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Asset by UUID
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Asset' }
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    put:
+      tags: [assets]
+      summary: Update asset
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAssetRequest' }
+      responses:
+        '200':
+          description: Asset updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Asset' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    delete:
+      tags: [assets]
+      summary: Delete asset
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  /assets/{uuid}/prices:
+    get:
+      tags: [assets]
+      summary: Get price history for asset
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+      responses:
+        '200':
+          description: Price history
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/AssetPriceHistory' } }
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    post:
+      tags: [assets]
+      summary: Record a price manually
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                price: { type: number }
+                source: { type: string }
+                recordedAt: { type: string, format: date-time }
+      responses:
+        '201':
+          description: Price recorded
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+  /assets/{uuid}/prices/fetch:
+    post:
+      tags: [assets]
+      summary: Fetch and record current price from external source
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Price fetched and recorded
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  # --- Incomes ---
+  /incomes:
+    get:
+      tags: [incomes]
+      summary: List incomes (paginated, optional date filter)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/Month'
+        - $ref: '#/components/parameters/Year'
+      responses:
+        '200':
+          description: Paginated list of incomes
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ListResponseIncome' }
+        '401':
+          description: Unauthorized
+    post:
+      tags: [incomes]
+      summary: Create income
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateIncomeRequest' }
+      responses:
+        '201':
+          description: Income created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Income' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+
+  /incomes/{uuid}:
+    get:
+      tags: [incomes]
+      summary: Get income by UUID
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Income by UUID
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Income' }
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    put:
+      tags: [incomes]
+      summary: Update income
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateIncomeRequest' }
+      responses:
+        '200':
+          description: Income updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Income' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    delete:
+      tags: [incomes]
+      summary: Delete income
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  # --- Expenses ---
+  /expenses:
+    get:
+      tags: [expenses]
+      summary: List expenses (paginated, optional date filter)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/Month'
+        - $ref: '#/components/parameters/Year'
+      responses:
+        '200':
+          description: Paginated list of expenses
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ListResponseExpense' }
+        '401':
+          description: Unauthorized
+    post:
+      tags: [expenses]
+      summary: Create expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateExpenseRequest' }
+      responses:
+        '201':
+          description: Expense created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Expense' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+
+  /expenses/{uuid}:
+    get:
+      tags: [expenses]
+      summary: Get expense by UUID
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Expense by UUID
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Expense' }
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    put:
+      tags: [expenses]
+      summary: Update expense
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateExpenseRequest' }
+      responses:
+        '200':
+          description: Expense updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Expense' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    delete:
+      tags: [expenses]
+      summary: Delete expense
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  # --- Saving goals ---
+  /saving-goals:
+    get:
+      tags: [saving-goals]
+      summary: List saving goals (paginated)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated list of saving goals
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ListResponseSavingGoal' }
+        '401':
+          description: Unauthorized
+    post:
+      tags: [saving-goals]
+      summary: Create saving goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSavingGoalRequest' }
+      responses:
+        '201':
+          description: Saving goal created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SavingGoal' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+
+  /saving-goals/{uuid}:
+    get:
+      tags: [saving-goals]
+      summary: Get saving goal by UUID
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Saving goal by UUID
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SavingGoal' }
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    put:
+      tags: [saving-goals]
+      summary: Update saving goal
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateSavingGoalRequest' }
+      responses:
+        '200':
+          description: Saving goal updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SavingGoal' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    delete:
+      tags: [saving-goals]
+      summary: Delete saving goal
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  # --- Portfolio ---
+  /portfolio:
+    get:
+      tags: [portfolio]
+      summary: Get portfolio summary
+      parameters:
+        - $ref: '#/components/parameters/Currency'
+      responses:
+        '200':
+          description: Portfolio summary in requested currency
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { type: object, description: Portfolio aggregates in requested currency }
+        '401':
+          description: Unauthorized
+
+  /portfolio/assets/{uuid}:
+    get:
+      tags: [portfolio]
+      summary: Get single asset value
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+        - $ref: '#/components/parameters/Currency'
+      responses:
+        '200':
+          description: Asset value in requested currency
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { type: object }
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  # --- Performance ---
+  /assets/{uuid}/performance:
+    get:
+      tags: [performance]
+      summary: Get asset performance
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+        - $ref: '#/components/parameters/Currency'
+      responses:
+        '200':
+          description: Asset performance in requested currency
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { type: object }
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  /portfolio/performance:
+    get:
+      tags: [performance]
+      summary: Get portfolio performance
+      parameters:
+        - $ref: '#/components/parameters/Currency'
+      responses:
+        '200':
+          description: Portfolio performance in requested currency
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { type: object }
+        '401':
+          description: Unauthorized
+
+  # --- Insights ---
+  /insights/cashflow:
+    get:
+      tags: [insights]
+      summary: Get cashflow summary for a month
+      parameters:
+        - name: month
+          in: query
+          schema: { type: string, example: "2025-02", description: YYYY-MM }
+      responses:
+        '200':
+          description: Cashflow summary for the month
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/CashflowSummary' }
+        '401':
+          description: Unauthorized
+
+  /insights/overview:
+    get:
+      tags: [insights]
+      summary: Get financial overview (includes monthly trend for charts)
+      responses:
+        '200':
+          description: Financial overview with monthly trend (12 months)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/FinancialOverview' }
+        '401':
+          description: Unauthorized
+
+  # --- Prices (external; optional auth) ---
+  /prices/crypto/{symbol}:
+    get:
+      tags: [prices]
+      summary: Get current crypto price
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema: { type: string, example: BTC }
+        - $ref: '#/components/parameters/Currency'
+      security: []
+      responses:
+        '200':
+          description: Current crypto price
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { type: object }
+        '400':
+          description: Bad request
+        '404':
+          description: Symbol not found
+
+  /prices/stock/{symbol}:
+    get:
+      tags: [prices]
+      summary: Get current stock price
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Currency'
+      security: []
+      responses:
+        '200':
+          description: Current stock price
+        '400':
+          description: Bad request
+        '404':
+          description: Symbol not found
+
+  /prices/crypto/{symbol}/chart:
+    get:
+      tags: [prices]
+      summary: Get crypto chart data
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Currency'
+        - name: days
+          in: query
+          schema: { type: integer }
+        - name: range
+          in: query
+          schema: { type: string }
+        - name: interval
+          in: query
+          schema: { type: string }
+      security: []
+      responses:
+        '200':
+          description: Crypto chart time series
+        '400':
+          description: Bad request
+        '404':
+          description: Symbol not found
+
+  /prices/stock/{symbol}/chart:
+    get:
+      tags: [prices]
+      summary: Get stock chart data
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Currency'
+      security: []
+      responses:
+        '200':
+          description: Stock chart time series
+        '400':
+          description: Bad request
+        '404':
+          description: Symbol not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from login or refresh
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+      description: Page number (1-based)
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      description: Items per page
+    UuidPath:
+      name: uuid
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DateFrom:
+      name: date_from
+      in: query
+      schema: { type: string, format: date }
+      description: Start date (ISO 8601). Inclusive. Ignored if month/year set.
+    DateTo:
+      name: date_to
+      in: query
+      schema: { type: string, format: date }
+      description: End date (ISO 8601). Inclusive. Ignored if month/year set.
+    Month:
+      name: month
+      in: query
+      schema: { type: string, example: "2025-02" }
+      description: Shortcut for full month (YYYY-MM). Overrides date_from/date_to.
+    Year:
+      name: year
+      in: query
+      schema: { type: string, example: "2025" }
+      description: Shortcut for full year. Overrides date_from/date_to when month not set.
+    Currency:
+      name: currency
+      in: query
+      schema: { type: string, default: IDR, example: IDR }
+      description: Display currency (e.g. IDR, USD). Used by portfolio, performance, price endpoints.
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      required: [success, message]
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+        data: { description: Response payload; omit on error }
+
+    ErrorResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+        errors:
+          type: object
+          description: Always an object; use message key for generic message or field keys for validation
+          additionalProperties: true
+          example: { message: "invalid email or password" }
+
+    ListMeta:
+      type: object
+      properties:
+        total: { type: integer, description: Total count of items }
+        page: { type: integer }
+        limit: { type: integer }
+        totalPages: { type: integer }
+
+    ListResponseAsset:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Asset' } }
+        meta: { $ref: '#/components/schemas/ListMeta' }
+
+    ListResponseIncome:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Income' } }
+        meta: { $ref: '#/components/schemas/ListMeta' }
+
+    ListResponseExpense:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Expense' } }
+        meta: { $ref: '#/components/schemas/ListMeta' }
+
+    ListResponseSavingGoal:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/SavingGoal' } }
+        meta: { $ref: '#/components/schemas/ListMeta' }
+
+    RegisterRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 1 }
+        name: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    User:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string, nullable: true }
+        role: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    SuccessAuthData:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                token: { type: string, description: Access JWT }
+                refreshToken: { type: string, description: Refresh JWT }
+                user: { $ref: '#/components/schemas/User' }
+
+    CreateIncomeRequest:
+      type: object
+      required: [assetUuid, amount, source, date]
+      properties:
+        assetUuid: { type: string, format: uuid }
+        amount: { type: number }
+        source: { type: string }
+        note: { type: string, nullable: true }
+        date: { type: string, format: date-time }
+
+    UpdateIncomeRequest:
+      type: object
+      properties:
+        assetUuid: { type: string, format: uuid, nullable: true }
+        amount: { type: number, nullable: true }
+        source: { type: string, nullable: true }
+        note: { type: string, nullable: true }
+        date: { type: string, format: date-time, nullable: true }
+
+    Income:
+      type: object
+      properties:
+        uuid: { type: string }
+        amount: { type: number }
+        source: { type: string }
+        note: { type: string, nullable: true }
+        date: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        asset: { $ref: '#/components/schemas/Asset', nullable: true }
+
+    CreateExpenseRequest:
+      type: object
+      required: [assetUuid, amount, category, date]
+      properties:
+        assetUuid: { type: string, format: uuid }
+        amount: { type: number }
+        category: { type: string, enum: [FOOD, TRANSPORT, HOUSING, UTILITIES, HEALTH, ENTERTAINMENT, SHOPPING, OTHER] }
+        note: { type: string, nullable: true }
+        date: { type: string, format: date-time }
+
+    UpdateExpenseRequest:
+      type: object
+      properties:
+        assetUuid: { type: string, format: uuid, nullable: true }
+        amount: { type: number, nullable: true }
+        category: { type: string, enum: [FOOD, TRANSPORT, HOUSING, UTILITIES, HEALTH, ENTERTAINMENT, SHOPPING, OTHER], nullable: true }
+        note: { type: string, nullable: true }
+        date: { type: string, format: date-time, nullable: true }
+
+    Expense:
+      type: object
+      properties:
+        uuid: { type: string }
+        amount: { type: number }
+        category: { type: string }
+        note: { type: string, nullable: true }
+        date: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        asset: { $ref: '#/components/schemas/Asset', nullable: true }
+
+    CreateSavingGoalRequest:
+      type: object
+      required: [title, targetAmount, currentAmount]
+      properties:
+        title: { type: string }
+        targetAmount: { type: number }
+        currentAmount: { type: number }
+        deadline: { type: string, format: date-time, nullable: true }
+
+    UpdateSavingGoalRequest:
+      type: object
+      properties:
+        title: { type: string, nullable: true }
+        targetAmount: { type: number, nullable: true }
+        currentAmount: { type: number, nullable: true }
+        deadline: { type: string, format: date-time, nullable: true }
+
+    SavingGoal:
+      type: object
+      properties:
+        uuid: { type: string }
+        title: { type: string }
+        targetAmount: { type: number }
+        currentAmount: { type: number }
+        deadline: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Asset:
+      type: object
+      properties:
+        uuid: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [CRYPTO, STOCK, CASH, REAL_ESTATE, LIVESTOCK, OTHER] }
+        quantity: { type: number }
+        symbol: { type: string, nullable: true }
+        purchasePrice: { type: number }
+        purchaseDate: { type: string, format: date-time }
+        purchaseCurrency: { type: string }
+        totalCost: { type: number }
+        status: { type: string, enum: [ACTIVE, SOLD, PLANNED] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateAssetRequest:
+      type: object
+      required: [name, type, quantity, purchasePrice, purchaseDate, purchaseCurrency, totalCost]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [CRYPTO, STOCK, CASH, REAL_ESTATE, LIVESTOCK, OTHER] }
+        quantity: { type: number }
+        symbol: { type: string, nullable: true }
+        purchasePrice: { type: number }
+        purchaseDate: { type: string, description: ISO 8601 date }
+        purchaseCurrency: { type: string }
+        totalCost: { type: number }
+        transactionFee: { type: number, nullable: true }
+        maintenanceCost: { type: number, nullable: true }
+        targetPrice: { type: number, nullable: true }
+        targetDate: { type: string, nullable: true }
+        estimatedYield: { type: number, nullable: true }
+        yieldPeriod: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        status: { type: string, enum: [ACTIVE, SOLD, PLANNED], nullable: true }
+
+    UpdateAssetRequest:
+      type: object
+      properties:
+        name: { type: string, nullable: true }
+        type: { type: string, enum: [CRYPTO, STOCK, CASH, REAL_ESTATE, LIVESTOCK, OTHER], nullable: true }
+        quantity: { type: number, nullable: true }
+        symbol: { type: string, nullable: true }
+        purchasePrice: { type: number, nullable: true }
+        purchaseDate: { type: string, nullable: true }
+        purchaseCurrency: { type: string, nullable: true }
+        totalCost: { type: number, nullable: true }
+        transactionFee: { type: number, nullable: true }
+        maintenanceCost: { type: number, nullable: true }
+        targetPrice: { type: number, nullable: true }
+        targetDate: { type: string, nullable: true }
+        estimatedYield: { type: number, nullable: true }
+        yieldPeriod: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        status: { type: string, enum: [ACTIVE, SOLD, PLANNED], nullable: true }
+
+    AssetPriceHistory:
+      type: object
+      properties:
+        uuid: { type: string }
+        price: { type: number }
+        source: { type: string }
+        recordedAt: { type: string, format: date-time }
+
+    CashflowSummary:
+      type: object
+      properties:
+        period: { type: string }
+        totalIncome: { type: number }
+        totalExpense: { type: number }
+        netSaving: { type: number }
+        savingRate: { type: number }
+        expenseByCategory: { type: array, items: { $ref: '#/components/schemas/CategoryTotal' } }
+
+    CategoryTotal:
+      type: object
+      properties:
+        category: { type: string }
+        total: { type: number }
+        percentage: { type: number }
+
+    MonthlyTrendPoint:
+      type: object
+      description: One month in the overview trend (for charts)
+      properties:
+        month: { type: string, example: "2025-01", description: YYYY-MM }
+        income: { type: number }
+        expense: { type: number }
+        netSaving: { type: number }
+
+    FinancialOverview:
+      type: object
+      properties:
+        totalAssets: { type: number }
+        totalSavingGoals: { type: integer }
+        totalTargetAmount: { type: number }
+        totalCurrentAmount: { type: number }
+        savingGoalProgress: { type: number }
+        monthlyIncome: { type: number }
+        monthlyExpense: { type: number }
+        monthlyNetSaving: { type: number }
+        monthlyTrend:
+          type: array
+          items: { $ref: '#/components/schemas/MonthlyTrendPoint' }
+          description: Last 12 months, oldest first (for line/area charts)

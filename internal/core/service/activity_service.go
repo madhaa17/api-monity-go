@@ -35,11 +35,11 @@ func NewActivityService(expenseRepo port.ExpenseRepository, incomeRepo port.Inco
 func (s *ActivityService) ListActivities(ctx context.Context, userID int64, groupBy string, dateFilter string, timezone string) (*port.ActivityResponse, error) {
 	groupBy = normalizeGroupBy(groupBy)
 
-	expenses, err := s.expenseRepo.ListByUserID(ctx, userID)
+	expenses, _, err := s.expenseRepo.ListByUserID(ctx, userID, nil, nil, 1, 10000)
 	if err != nil {
 		return nil, fmt.Errorf("list expenses: %w", err)
 	}
-	incomes, err := s.incomeRepo.ListByUserID(ctx, userID)
+	incomes, _, err := s.incomeRepo.ListByUserID(ctx, userID, nil, nil, 1, 10000)
 	if err != nil {
 		return nil, fmt.Errorf("list incomes: %w", err)
 	}

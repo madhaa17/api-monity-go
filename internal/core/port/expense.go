@@ -9,7 +9,7 @@ import (
 type ExpenseRepository interface {
 	Create(ctx context.Context, expense *models.Expense) error
 	GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Expense, error)
-	ListByUserID(ctx context.Context, userID int64) ([]models.Expense, error)
+	ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Expense, int64, error)
 	Update(ctx context.Context, expense *models.Expense) error
 	Delete(ctx context.Context, uuid string, userID int64) error
 }
@@ -17,7 +17,7 @@ type ExpenseRepository interface {
 type ExpenseService interface {
 	CreateExpense(ctx context.Context, userID int64, req CreateExpenseRequest) (*models.Expense, error)
 	GetExpense(ctx context.Context, userID int64, uuid string) (*models.Expense, error)
-	ListExpenses(ctx context.Context, userID int64) ([]models.Expense, error)
+	ListExpenses(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Expense, ListMeta, error)
 	UpdateExpense(ctx context.Context, userID int64, uuid string, req UpdateExpenseRequest) (*models.Expense, error)
 	DeleteExpense(ctx context.Context, userID int64, uuid string) error
 }

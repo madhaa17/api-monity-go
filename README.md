@@ -67,6 +67,7 @@ backend/
 
 - **Local:** `http://localhost:8080` · **Production:** port 8386 (or your deployment domain)
 - **API prefix:** `/api/v1`
+- **OpenAPI:** [docs/openapi.yaml](docs/openapi.yaml) — full spec for codegen (e.g. openapi-generator, orval) and reference (paths, query params, request/response schemas, list pagination `items` + `meta`, error object shape).
 
 | Area         | Example endpoints                      | Auth   |
 |-------------|-----------------------------------------|--------|
@@ -86,7 +87,40 @@ backend/
 
 Protected routes require header: `Authorization: Bearer <token>`.
 
-- **Postman:** Import [docs/Monity_API.postman_collection.json](docs/Monity_API.postman_collection.json). Login/Register auto-save `token`;
+- **Postman:** Import [docs/Monity_API.postman_collection.json](docs/Monity_API.postman_collection.json). Login/Register auto-save `token`.
+
+### Date and time
+
+- All dates and times from the API use **ISO 8601 / RFC3339** (e.g. `2025-02-10T00:00:00Z`).
+- Query parameters for date filters (`date_from`, `date_to`) and body fields (e.g. `date` on income/expense) use the same format.
+- **Timezone:** Server uses **UTC** for storage and range calculations. When sending `date_from`/`date_to` or `month`/`year`, values are interpreted in UTC. For local-time grouping (e.g. activities), use the optional `tz` query (IANA timezone) where supported.
+
+### Currency
+
+Endpoints that support a `currency` query parameter (for display/conversion). Default is **IDR** when omitted.
+
+| Endpoint | Query | Default | Notes |
+|----------|--------|--------|--------|
+| `GET /portfolio` | `currency` | IDR | Portfolio summary in given currency |
+| `GET /portfolio/assets/{uuid}` | `currency` | IDR | Single asset value |
+| `GET /assets/{uuid}/performance` | `currency` | IDR | Asset performance |
+| `GET /portfolio/performance` | `currency` | IDR | Portfolio performance |
+| `GET /prices/crypto/{symbol}` | `currency` | IDR | Current crypto price |
+| `GET /prices/stock/{symbol}` | `currency` | IDR | Current stock price |
+| `GET /prices/crypto/{symbol}/chart` | `currency` | IDR | Chart series |
+| `GET /prices/stock/{symbol}/chart` | `currency` | IDR | Chart series |
+
+Example: `GET /api/v1/portfolio?currency=USD`.
+
+### Auth and refresh token flow
+
+- **Login / Register** return `data.token` (access JWT) and `data.refreshToken` (refresh JWT). Store both (e.g. in memory + `localStorage`, or secure cookies) as needed for your app.
+- **Protected requests:** Send the access token in the header: `Authorization: Bearer <access_token>`.
+- **When to refresh:** Call `POST /api/v1/auth/refresh` with body `{ "refresh_token": "<refresh_token>" }` either:
+  - **Proactively** before the access token expires (e.g. when you know TTL and refresh a bit earlier), or
+  - **On 401** when any protected request returns Unauthorized — then retry the request after storing the new tokens from the refresh response.
+- **Refresh response** has the same shape as login: `data.token`, `data.refreshToken`, `data.user`. Replace stored access and refresh with the new values.
+- **Logout:** `POST /api/v1/auth/logout` (optionally with `refresh_token` in body) invalidates the session; discard stored tokens on the client.
 
 ## Security & middleware
 

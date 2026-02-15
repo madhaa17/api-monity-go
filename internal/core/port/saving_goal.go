@@ -9,7 +9,7 @@ import (
 type SavingGoalRepository interface {
 	Create(ctx context.Context, goal *models.SavingGoal) error
 	GetByUUID(ctx context.Context, uuid string, userID int64) (*models.SavingGoal, error)
-	ListByUserID(ctx context.Context, userID int64) ([]models.SavingGoal, error)
+	ListByUserID(ctx context.Context, userID int64, page, limit int) ([]models.SavingGoal, int64, error)
 	Update(ctx context.Context, goal *models.SavingGoal) error
 	Delete(ctx context.Context, uuid string, userID int64) error
 }
@@ -17,7 +17,7 @@ type SavingGoalRepository interface {
 type SavingGoalService interface {
 	CreateSavingGoal(ctx context.Context, userID int64, req CreateSavingGoalRequest) (*models.SavingGoal, error)
 	GetSavingGoal(ctx context.Context, userID int64, uuid string) (*models.SavingGoal, error)
-	ListSavingGoals(ctx context.Context, userID int64) ([]models.SavingGoal, error)
+	ListSavingGoals(ctx context.Context, userID int64, page, limit int) ([]models.SavingGoal, ListMeta, error)
 	UpdateSavingGoal(ctx context.Context, userID int64, uuid string, req UpdateSavingGoalRequest) (*models.SavingGoal, error)
 	DeleteSavingGoal(ctx context.Context, userID int64, uuid string) error
 }

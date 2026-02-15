@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"monity/internal/core/port"
 	"monity/internal/models"
@@ -99,15 +100,29 @@ func (s *IncomeService) GetIncome(ctx context.Context, userID int64, uuid string
 	return income, nil
 }
 
-func (s *IncomeService) ListIncomes(ctx context.Context, userID int64) ([]models.Income, error) {
-	incomes, err := s.repo.ListByUserID(ctx, userID)
+func (s *IncomeService) ListIncomes(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Income, port.ListMeta, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	incomes, total, err := s.repo.ListByUserID(ctx, userID, dateFrom, dateTo, page, limit)
 	if err != nil {
-		return nil, fmt.Errorf("list incomes: %w", err)
+		return nil, port.ListMeta{}, fmt.Errorf("list incomes: %w", err)
 	}
 	if incomes == nil {
-		return []models.Income{}, nil
+		incomes = []models.Income{}
 	}
-	return incomes, nil
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+	if totalPages < 0 {
+		totalPages = 0
+	}
+	meta := port.ListMeta{Total: total, Page: page, Limit: limit, TotalPages: totalPages}
+	return incomes, meta, nil
 }
 
 func (s *IncomeService) UpdateIncome(ctx context.Context, userID int64, uuid string, req port.UpdateIncomeRequest) (*models.Income, error) {

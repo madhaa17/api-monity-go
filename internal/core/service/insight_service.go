@@ -98,6 +98,28 @@ func (s *InsightService) GetFinancialOverview(ctx context.Context, userID int64)
 		return nil, fmt.Errorf("get saving goal summary: %w", err)
 	}
 
+	// Build monthly trend (last 12 months, oldest first)
+	monthlyTrend := make([]port.MonthlyTrendPoint, 0, 12)
+	for i := 11; i >= 0; i-- {
+		m := now.AddDate(0, -i, 0)
+		start := time.Date(m.Year(), m.Month(), 1, 0, 0, 0, 0, time.UTC)
+		end := start.AddDate(0, 1, 0)
+		inc, err := s.repo.GetTotalIncomeByDateRange(ctx, userID, start, end)
+		if err != nil {
+			return nil, fmt.Errorf("get trend income: %w", err)
+		}
+		exp, err := s.repo.GetTotalExpenseByDateRange(ctx, userID, start, end)
+		if err != nil {
+			return nil, fmt.Errorf("get trend expense: %w", err)
+		}
+		monthlyTrend = append(monthlyTrend, port.MonthlyTrendPoint{
+			Month:     m.Format("2006-01"),
+			Income:    inc,
+			Expense:   exp,
+			NetSaving: inc.Sub(exp),
+		})
+	}
+
 	return &port.FinancialOverview{
 		TotalAssets:        totalAssets,
 		TotalSavingGoals:   savingGoalSummary.TotalGoals,
@@ -107,6 +129,7 @@ func (s *InsightService) GetFinancialOverview(ctx context.Context, userID int64)
 		MonthlyIncome:      monthlyIncome,
 		MonthlyExpense:     monthlyExpense,
 		MonthlyNetSaving:   monthlyNetSaving,
+		MonthlyTrend:       monthlyTrend,
 	}, nil
 }
 

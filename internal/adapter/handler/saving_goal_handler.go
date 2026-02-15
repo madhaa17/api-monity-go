@@ -55,14 +55,13 @@ func (h *SavingGoalHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
-
-	goals, err := h.svc.ListSavingGoals(r.Context(), userID)
+	page, limit := parsePageLimit(r, 1, 20, 100)
+	goals, meta, err := h.svc.ListSavingGoals(r.Context(), userID, page, limit)
 	if err != nil {
 		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to list saving goals", err.Error())
 		return
 	}
-
-	response.Success(w, http.StatusOK, "saving goals retrieved", goals)
+	response.Success(w, http.StatusOK, "saving goals retrieved", port.ListResponse{Items: goals, Meta: meta})
 }
 
 func (h *SavingGoalHandler) Get(w http.ResponseWriter, r *http.Request) {

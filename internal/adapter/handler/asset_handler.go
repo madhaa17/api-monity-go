@@ -55,14 +55,13 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
-
-	assets, err := h.svc.ListAssets(r.Context(), userID)
+	page, limit := parsePageLimit(r, 1, 20, 100)
+	assets, meta, err := h.svc.ListAssets(r.Context(), userID, page, limit)
 	if err != nil {
 		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to list assets", err.Error())
 		return
 	}
-
-	response.Success(w, http.StatusOK, "assets retrieved", assets)
+	response.Success(w, http.StatusOK, "assets retrieved", port.ListResponse{Items: assets, Meta: meta})
 }
 
 func (h *AssetHandler) Get(w http.ResponseWriter, r *http.Request) {

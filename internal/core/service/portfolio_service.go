@@ -31,7 +31,7 @@ func (s *PortfolioService) GetPortfolio(ctx context.Context, userID int64, curre
 		currency = port.DefaultCurrency
 	}
 
-	assets, err := s.assetRepo.ListByUserID(ctx, userID)
+	assets, _, err := s.assetRepo.ListByUserID(ctx, userID, 1, 10000)
 	if err != nil {
 		return nil, fmt.Errorf("list assets: %w", err)
 	}

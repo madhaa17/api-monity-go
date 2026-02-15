@@ -9,7 +9,7 @@ import (
 type IncomeRepository interface {
 	Create(ctx context.Context, income *models.Income) error
 	GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Income, error)
-	ListByUserID(ctx context.Context, userID int64) ([]models.Income, error)
+	ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Income, int64, error)
 	Update(ctx context.Context, income *models.Income) error
 	Delete(ctx context.Context, uuid string, userID int64) error
 }
@@ -17,7 +17,7 @@ type IncomeRepository interface {
 type IncomeService interface {
 	CreateIncome(ctx context.Context, userID int64, req CreateIncomeRequest) (*models.Income, error)
 	GetIncome(ctx context.Context, userID int64, uuid string) (*models.Income, error)
-	ListIncomes(ctx context.Context, userID int64) ([]models.Income, error)
+	ListIncomes(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Income, ListMeta, error)
 	UpdateIncome(ctx context.Context, userID int64, uuid string, req UpdateIncomeRequest) (*models.Income, error)
 	DeleteIncome(ctx context.Context, userID int64, uuid string) error
 }

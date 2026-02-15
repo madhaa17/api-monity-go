@@ -131,15 +131,29 @@ func (s *AssetService) GetAsset(ctx context.Context, userID int64, uuid string) 
 	return asset, nil
 }
 
-func (s *AssetService) ListAssets(ctx context.Context, userID int64) ([]models.Asset, error) {
-	assets, err := s.repo.ListByUserID(ctx, userID)
+func (s *AssetService) ListAssets(ctx context.Context, userID int64, page, limit int) ([]models.Asset, port.ListMeta, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	assets, total, err := s.repo.ListByUserID(ctx, userID, page, limit)
 	if err != nil {
-		return nil, fmt.Errorf("list assets: %w", err)
+		return nil, port.ListMeta{}, fmt.Errorf("list assets: %w", err)
 	}
 	if assets == nil {
-		return []models.Asset{}, nil
+		assets = []models.Asset{}
 	}
-	return assets, nil
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+	if totalPages < 0 {
+		totalPages = 0
+	}
+	meta := port.ListMeta{Total: total, Page: page, Limit: limit, TotalPages: totalPages}
+	return assets, meta, nil
 }
 
 func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid string, req port.UpdateAssetRequest) (*models.Asset, error) {

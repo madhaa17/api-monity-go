@@ -61,6 +61,9 @@ func (s *ExpenseService) CreateExpense(ctx context.Context, userID int64, req po
 	}
 
 	amount := decimal.NewFromFloat(req.Amount)
+	if amount.GreaterThan(asset.Quantity) {
+		return nil, errors.New("expense amount cannot exceed the selected asset balance")
+	}
 
 	// Deduct from CASH asset
 	oldQty := asset.Quantity
@@ -162,6 +165,9 @@ func (s *ExpenseService) UpdateExpense(ctx context.Context, userID int64, uuid s
 		}
 
 		if newAsset.ID != oldAssetID {
+			if newAsset.Quantity.LessThan(expense.Amount) {
+				return nil, errors.New("expense amount cannot exceed the selected asset balance")
+			}
 			// Restore old asset: add back old amount
 			oldAsset, err := s.assetRepo.GetByID(ctx, oldAssetID)
 			if err != nil {
@@ -184,6 +190,9 @@ func (s *ExpenseService) UpdateExpense(ctx context.Context, userID int64, uuid s
 			// Same asset, adjust difference
 			diff := expense.Amount.Sub(oldAmount)
 			if !diff.IsZero() {
+				if diff.IsPositive() && newAsset.Quantity.LessThan(diff) {
+					return nil, errors.New("expense amount cannot exceed the selected asset balance")
+				}
 				newAsset.Quantity = newAsset.Quantity.Sub(diff)
 				if err := s.assetRepo.Update(ctx, newAsset); err != nil {
 					return nil, fmt.Errorf("update asset balance: %w", err)
@@ -199,6 +208,9 @@ func (s *ExpenseService) UpdateExpense(ctx context.Context, userID int64, uuid s
 				return nil, fmt.Errorf("get asset: %w", err)
 			}
 			if asset != nil {
+				if diff.IsPositive() && asset.Quantity.LessThan(diff) {
+					return nil, errors.New("expense amount cannot exceed the selected asset balance")
+				}
 				asset.Quantity = asset.Quantity.Sub(diff)
 				if err := s.assetRepo.Update(ctx, asset); err != nil {
 					return nil, fmt.Errorf("update asset balance: %w", err)

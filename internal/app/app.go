@@ -31,15 +31,21 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 	expenseRepo := repository.NewExpenseRepository(db)
 	incomeRepo := repository.NewIncomeRepository(db)
 	savingGoalRepo := repository.NewSavingGoalRepository(db)
+	debtRepo := repository.NewDebtRepository(db)
+	debtPaymentRepo := repository.NewDebtPaymentRepository(db)
+	receivableRepo := repository.NewReceivableRepository(db)
+	receivablePaymentRepo := repository.NewReceivablePaymentRepository(db)
 	assetPriceHistoryRepo := repository.NewAssetPriceHistoryRepository(db)
 	insightRepo := repository.NewInsightRepository(db)
 
 	authSvc := service.NewAuthService(userRepo, cfg, c)
 	assetSvc := service.NewAssetService(assetRepo)
-	activitySvc := service.NewActivityService(expenseRepo, incomeRepo)
+	activitySvc := service.NewActivityService(expenseRepo, incomeRepo, debtRepo, receivableRepo)
 	expenseSvc := service.NewExpenseService(expenseRepo, assetRepo)
 	incomeSvc := service.NewIncomeService(incomeRepo, assetRepo)
 	savingGoalSvc := service.NewSavingGoalService(savingGoalRepo)
+	debtSvc := service.NewDebtService(debtRepo, debtPaymentRepo, assetRepo)
+	receivableSvc := service.NewReceivableService(receivableRepo, receivablePaymentRepo, assetRepo)
 	priceSvc := service.NewPriceService(&cfg.PriceAPI, c)
 	assetPriceHistorySvc := service.NewAssetPriceHistoryService(assetPriceHistoryRepo, assetRepo, priceSvc)
 	insightSvc := service.NewInsightService(insightRepo)
@@ -55,6 +61,8 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 		Expense:           handler.NewExpenseHandler(expenseSvc),
 		Income:            handler.NewIncomeHandler(incomeSvc),
 		SavingGoal:        handler.NewSavingGoalHandler(savingGoalSvc),
+		Debt:              handler.NewDebtHandler(debtSvc),
+		Receivable:        handler.NewReceivableHandler(receivableSvc),
 		Price:             handler.NewPriceHandler(priceSvc),
 		AssetPriceHistory: handler.NewAssetPriceHistoryHandler(assetPriceHistorySvc),
 		Insight:           handler.NewInsightHandler(insightSvc),

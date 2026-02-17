@@ -59,3 +59,22 @@ func parseDateFilter(r *http.Request) (dateFrom, dateTo *time.Time) {
 	}
 	return nil, nil
 }
+
+// parseDueFilter returns dueFrom, dueTo from query: due_from, due_to (ISO date).
+func parseDueFilter(r *http.Request) (dueFrom, dueTo *time.Time) {
+	from := r.URL.Query().Get("due_from")
+	to := r.URL.Query().Get("due_to")
+	if from != "" {
+		if t, err := time.Parse("2006-01-02", from); err == nil {
+			start := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+			dueFrom = &start
+		}
+	}
+	if to != "" {
+		if t, err := time.Parse("2006-01-02", to); err == nil {
+			end := time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, time.UTC)
+			dueTo = &end
+		}
+	}
+	return dueFrom, dueTo
+}

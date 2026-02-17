@@ -13,6 +13,10 @@ type InsightRepository interface {
 	GetExpensesByCategory(ctx context.Context, userID int64, startDate, endDate time.Time) ([]CategoryTotal, error)
 	GetTotalAssetValue(ctx context.Context, userID int64) (decimal.Decimal, error)
 	GetTotalSavingGoalProgress(ctx context.Context, userID int64) (*SavingGoalSummary, error)
+	GetTotalDebt(ctx context.Context, userID int64) (decimal.Decimal, error)
+	GetTotalReceivable(ctx context.Context, userID int64) (decimal.Decimal, error)
+	GetDebtOverdueCount(ctx context.Context, userID int64) (int, error)
+	GetReceivableOverdueCount(ctx context.Context, userID int64) (int, error)
 }
 
 type InsightService interface {
@@ -44,15 +48,19 @@ type MonthlyTrendPoint struct {
 }
 
 type FinancialOverview struct {
-	TotalAssets        decimal.Decimal      `json:"totalAssets"`
-	TotalSavingGoals   int                  `json:"totalSavingGoals"`
-	TotalTargetAmount  decimal.Decimal     `json:"totalTargetAmount"`
-	TotalCurrentAmount decimal.Decimal      `json:"totalCurrentAmount"`
-	SavingGoalProgress float64              `json:"savingGoalProgress"`
-	MonthlyIncome      decimal.Decimal     `json:"monthlyIncome"`
-	MonthlyExpense     decimal.Decimal     `json:"monthlyExpense"`
-	MonthlyNetSaving   decimal.Decimal     `json:"monthlyNetSaving"`
-	MonthlyTrend       []MonthlyTrendPoint `json:"monthlyTrend"` // last 12 months, oldest first
+	TotalAssets            decimal.Decimal      `json:"totalAssets"`
+	TotalSavingGoals       int                  `json:"totalSavingGoals"`
+	TotalTargetAmount      decimal.Decimal      `json:"totalTargetAmount"`
+	TotalCurrentAmount     decimal.Decimal      `json:"totalCurrentAmount"`
+	SavingGoalProgress     float64              `json:"savingGoalProgress"`
+	MonthlyIncome          decimal.Decimal     `json:"monthlyIncome"`
+	MonthlyExpense         decimal.Decimal     `json:"monthlyExpense"`
+	MonthlyNetSaving       decimal.Decimal     `json:"monthlyNetSaving"`
+	MonthlyTrend           []MonthlyTrendPoint `json:"monthlyTrend"` // last 12 months, oldest first
+	TotalDebt              decimal.Decimal     `json:"totalDebt"`
+	TotalReceivable        decimal.Decimal     `json:"totalReceivable"`
+	DebtOverdueCount       int                  `json:"debtOverdueCount"`
+	ReceivableOverdueCount int                  `json:"receivableOverdueCount"`
 }
 
 type SavingGoalSummary struct {

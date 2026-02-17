@@ -11,16 +11,17 @@ type ActivityService interface {
 	ListActivities(ctx context.Context, userID int64, groupBy string, dateFilter string, timezone string) (*ActivityResponse, error)
 }
 
-// ActivityItem is one entry in a group: either income or expense, in chronological order.
+// ActivityItem is one entry in a group: income, expense, debt, or receivable, in chronological order.
 type ActivityItem struct {
-	Type      string          `json:"type"` // "income" or "expense"
+	Type      string          `json:"type"` // "income", "expense", "debt", "receivable"
 	UUID      string          `json:"uuid"`
 	Amount    decimal.Decimal `json:"amount"`
 	Date      time.Time       `json:"date"`
 	CreatedAt time.Time       `json:"createdAt"`
 	Note      *string         `json:"note,omitempty"`
-	Source    string          `json:"source,omitempty"`   // income only
-	Category  string          `json:"category,omitempty"` // expense only
+	Source    string          `json:"source,omitempty"`    // income only
+	Category  string          `json:"category,omitempty"`  // expense only
+	PartyName string          `json:"partyName,omitempty"` // debt / receivable only
 }
 
 type ActivityGroup struct {

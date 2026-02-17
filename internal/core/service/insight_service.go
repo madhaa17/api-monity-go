@@ -98,6 +98,24 @@ func (s *InsightService) GetFinancialOverview(ctx context.Context, userID int64)
 		return nil, fmt.Errorf("get saving goal summary: %w", err)
 	}
 
+	// Get debt and receivable summary
+	totalDebt, err := s.repo.GetTotalDebt(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get total debt: %w", err)
+	}
+	totalReceivable, err := s.repo.GetTotalReceivable(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get total receivable: %w", err)
+	}
+	debtOverdueCount, err := s.repo.GetDebtOverdueCount(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get debt overdue count: %w", err)
+	}
+	receivableOverdueCount, err := s.repo.GetReceivableOverdueCount(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get receivable overdue count: %w", err)
+	}
+
 	// Build monthly trend (last 12 months, oldest first)
 	monthlyTrend := make([]port.MonthlyTrendPoint, 0, 12)
 	for i := 11; i >= 0; i-- {
@@ -121,15 +139,19 @@ func (s *InsightService) GetFinancialOverview(ctx context.Context, userID int64)
 	}
 
 	return &port.FinancialOverview{
-		TotalAssets:        totalAssets,
-		TotalSavingGoals:   savingGoalSummary.TotalGoals,
-		TotalTargetAmount:  savingGoalSummary.TotalTarget,
-		TotalCurrentAmount: savingGoalSummary.TotalCurrent,
-		SavingGoalProgress: savingGoalSummary.OverallProgress,
-		MonthlyIncome:      monthlyIncome,
-		MonthlyExpense:     monthlyExpense,
-		MonthlyNetSaving:   monthlyNetSaving,
-		MonthlyTrend:       monthlyTrend,
+		TotalAssets:            totalAssets,
+		TotalSavingGoals:       savingGoalSummary.TotalGoals,
+		TotalTargetAmount:       savingGoalSummary.TotalTarget,
+		TotalCurrentAmount:     savingGoalSummary.TotalCurrent,
+		SavingGoalProgress:      savingGoalSummary.OverallProgress,
+		MonthlyIncome:           monthlyIncome,
+		MonthlyExpense:          monthlyExpense,
+		MonthlyNetSaving:        monthlyNetSaving,
+		MonthlyTrend:            monthlyTrend,
+		TotalDebt:               totalDebt,
+		TotalReceivable:         totalReceivable,
+		DebtOverdueCount:        debtOverdueCount,
+		ReceivableOverdueCount:  receivableOverdueCount,
 	}, nil
 }
 

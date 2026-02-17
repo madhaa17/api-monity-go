@@ -74,16 +74,18 @@ backend/
 | Root        | `GET /` → `{"status":"ok"}`             | —      |
 | Health      | `GET /health` → status + DB             | —      |
 | Auth        | `POST /api/v1/auth/register`, `.../login`, `.../refresh`, `GET .../me`, `POST .../logout` | Bearer (me, logout) |
-| Activities  | `GET /api/v1/activities?group_by=day&date=YYYY-MM-DD` — incomes + expenses grouped (day/month/year), optional `date`, `tz` | Bearer |
+| Activities  | `GET /api/v1/activities?group_by=day&date=YYYY-MM-DD` — incomes, expenses, debts, receivables grouped (day/month/year), optional `date`, `tz` | Bearer |
 | Assets      | CRUD assets (crypto, stock, etc.)       | Bearer |
 | Incomes     | CRUD income                             | Bearer |
 | Expenses    | CRUD expenses                           | Bearer |
 | Saving goals| CRUD saving goals                       | Bearer |
+| Debts       | CRUD debts (hutang), `POST/GET .../debts/{uuid}/payments` for installments | Bearer |
+| Receivables | CRUD receivables (piutang), `POST/GET .../receivables/{uuid}/payments` for installments | Bearer |
 | Price       | Crypto (CoinGecko) / stock (Yahoo Finance) — free, no API key | —      |
 | Price chart| `GET .../prices/crypto/:symbol/chart?days=7&currency=idr`, `GET .../prices/stock/:symbol/chart?range=1mo&interval=1d`. Response: time series `data[]` dengan `t` (Unix second) dan `p` (price); lihat [docs/curl-examples.md](docs/curl-examples.md) untuk format lengkap. | —      |
 | Portfolio   | Portfolio summary                       | Bearer |
 | Performance | Asset performance                       | Bearer |
-| Insight     | Financial insights                      | Bearer |
+| Insight     | Financial insights (overview includes totalDebt, totalReceivable, overdue counts) | Bearer |
 
 Protected routes require header: `Authorization: Bearer <token>`.
 

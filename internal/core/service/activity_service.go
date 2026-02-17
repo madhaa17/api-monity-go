@@ -17,17 +17,21 @@ const (
 	groupByYear  = "year"
 )
 
-// ActivityService implements business logic for listing and grouping user activities (incomes and expenses).
+// ActivityService implements business logic for listing and grouping user activities (incomes, expenses, debts, receivables).
 type ActivityService struct {
-	expenseRepo port.ExpenseRepository
-	incomeRepo  port.IncomeRepository
+	expenseRepo    port.ExpenseRepository
+	incomeRepo     port.IncomeRepository
+	debtRepo       port.DebtRepository
+	receivableRepo port.ReceivableRepository
 }
 
 // NewActivityService returns a new ActivityService with the given repositories.
-func NewActivityService(expenseRepo port.ExpenseRepository, incomeRepo port.IncomeRepository) port.ActivityService {
+func NewActivityService(expenseRepo port.ExpenseRepository, incomeRepo port.IncomeRepository, debtRepo port.DebtRepository, receivableRepo port.ReceivableRepository) port.ActivityService {
 	return &ActivityService{
-		expenseRepo: expenseRepo,
-		incomeRepo:  incomeRepo,
+		expenseRepo:    expenseRepo,
+		incomeRepo:     incomeRepo,
+		debtRepo:       debtRepo,
+		receivableRepo: receivableRepo,
 	}
 }
 
@@ -43,6 +47,14 @@ func (s *ActivityService) ListActivities(ctx context.Context, userID int64, grou
 	if err != nil {
 		return nil, fmt.Errorf("list incomes: %w", err)
 	}
+	debts, _, err := s.debtRepo.ListByUserID(ctx, userID, nil, nil, nil, 1, 1000)
+	if err != nil {
+		return nil, fmt.Errorf("list debts: %w", err)
+	}
+	receivables, _, err := s.receivableRepo.ListByUserID(ctx, userID, nil, nil, nil, 1, 1000)
+	if err != nil {
+		return nil, fmt.Errorf("list receivables: %w", err)
+	}
 
 	var loc *time.Location
 	if timezone != "" {
@@ -54,6 +66,8 @@ func (s *ActivityService) ListActivities(ctx context.Context, userID int64, grou
 	if dateFilter != "" {
 		incomes = filterIncomesByDate(incomes, dateFilter, loc)
 		expenses = filterExpensesByDate(expenses, dateFilter, loc)
+		debts = filterDebtsByDate(debts, dateFilter, loc)
+		receivables = filterReceivablesByDate(receivables, dateFilter, loc)
 	}
 
 	// group key -> slice of items (will merge and sort per group)
@@ -82,6 +96,32 @@ func (s *ActivityService) ListActivities(ctx context.Context, userID int64, grou
 			CreatedAt: expenses[i].CreatedAt,
 			Note:      expenses[i].Note,
 			Category:  string(expenses[i].Category),
+		}
+		groupsMap[key] = append(groupsMap[key], item)
+	}
+	for i := range debts {
+		key := groupKey(debts[i].CreatedAt, groupBy)
+		item := port.ActivityItem{
+			Type:      "debt",
+			UUID:      debts[i].UUID,
+			Amount:    debts[i].Amount,
+			Date:      debts[i].CreatedAt,
+			CreatedAt: debts[i].CreatedAt,
+			Note:      debts[i].Note,
+			PartyName: debts[i].PartyName,
+		}
+		groupsMap[key] = append(groupsMap[key], item)
+	}
+	for i := range receivables {
+		key := groupKey(receivables[i].CreatedAt, groupBy)
+		item := port.ActivityItem{
+			Type:      "receivable",
+			UUID:      receivables[i].UUID,
+			Amount:    receivables[i].Amount,
+			Date:      receivables[i].CreatedAt,
+			CreatedAt: receivables[i].CreatedAt,
+			Note:      receivables[i].Note,
+			PartyName: receivables[i].PartyName,
 		}
 		groupsMap[key] = append(groupsMap[key], item)
 	}
@@ -137,6 +177,32 @@ func filterExpensesByDate(expenses []models.Expense, dateFilter string, loc *tim
 	for i := range expenses {
 		if dateMatches(expenses[i].Date, dateFilter, loc) {
 			out = append(out, expenses[i])
+		}
+	}
+	return out
+}
+
+func filterDebtsByDate(debts []models.Debt, dateFilter string, loc *time.Location) []models.Debt {
+	if dateFilter == "" {
+		return debts
+	}
+	out := make([]models.Debt, 0, len(debts))
+	for i := range debts {
+		if dateMatches(debts[i].CreatedAt, dateFilter, loc) {
+			out = append(out, debts[i])
+		}
+	}
+	return out
+}
+
+func filterReceivablesByDate(receivables []models.Receivable, dateFilter string, loc *time.Location) []models.Receivable {
+	if dateFilter == "" {
+		return receivables
+	}
+	out := make([]models.Receivable, 0, len(receivables))
+	for i := range receivables {
+		if dateMatches(receivables[i].CreatedAt, dateFilter, loc) {
+			out = append(out, receivables[i])
 		}
 	}
 	return out

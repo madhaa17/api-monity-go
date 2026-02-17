@@ -145,3 +145,61 @@ func (r *InsightRepo) GetTotalSavingGoalProgress(ctx context.Context, userID int
 		OverallProgress: progress,
 	}, nil
 }
+
+func (r *InsightRepo) GetTotalDebt(ctx context.Context, userID int64) (decimal.Decimal, error) {
+	var total decimal.NullDecimal
+	err := r.db.WithContext(ctx).
+		Model(&models.Debt{}).
+		Select("COALESCE(SUM(amount - paid_amount), 0)").
+		Where("user_id = ? AND status != ?", userID, "PAID").
+		Scan(&total).Error
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("get total debt: %w", err)
+	}
+	if total.Valid {
+		return total.Decimal, nil
+	}
+	return decimal.Zero, nil
+}
+
+func (r *InsightRepo) GetTotalReceivable(ctx context.Context, userID int64) (decimal.Decimal, error) {
+	var total decimal.NullDecimal
+	err := r.db.WithContext(ctx).
+		Model(&models.Receivable{}).
+		Select("COALESCE(SUM(amount - paid_amount), 0)").
+		Where("user_id = ? AND status != ?", userID, "PAID").
+		Scan(&total).Error
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("get total receivable: %w", err)
+	}
+	if total.Valid {
+		return total.Decimal, nil
+	}
+	return decimal.Zero, nil
+}
+
+func (r *InsightRepo) GetDebtOverdueCount(ctx context.Context, userID int64) (int, error) {
+	var count int64
+	now := time.Now()
+	err := r.db.WithContext(ctx).
+		Model(&models.Debt{}).
+		Where("user_id = ? AND due_date < ? AND status != ?", userID, now, "PAID").
+		Count(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("get debt overdue count: %w", err)
+	}
+	return int(count), nil
+}
+
+func (r *InsightRepo) GetReceivableOverdueCount(ctx context.Context, userID int64) (int, error) {
+	var count int64
+	now := time.Now()
+	err := r.db.WithContext(ctx).
+		Model(&models.Receivable{}).
+		Where("user_id = ? AND due_date < ? AND status != ?", userID, now, "PAID").
+		Count(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("get receivable overdue count: %w", err)
+	}
+	return int(count), nil
+}

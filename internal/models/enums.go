@@ -38,3 +38,12 @@ const (
 	ExpenseCategoryShopping      ExpenseCategory = "SHOPPING"
 	ExpenseCategoryOther         ExpenseCategory = "OTHER"
 )
+
+type ObligationStatus string
+
+const (
+	ObligationStatusPending  ObligationStatus = "PENDING"
+	ObligationStatusPartial  ObligationStatus = "PARTIAL"
+	ObligationStatusPaid     ObligationStatus = "PAID"
+	ObligationStatusOverdue  ObligationStatus = "OVERDUE"
+)

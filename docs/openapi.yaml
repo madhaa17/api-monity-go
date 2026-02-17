@@ -24,6 +24,10 @@ tags:
     description: Expense entries
   - name: saving-goals
     description: Saving goals
+  - name: debts
+    description: Debts (hutang) and payments
+  - name: receivables
+    description: Receivables (piutang) and payments
   - name: portfolio
     description: Portfolio and asset values (supports currency)
   - name: performance
@@ -668,6 +672,332 @@ paths:
         '404':
           description: Not found
 
+  # --- Debts ---
+  /debts:
+    get:
+      tags: [debts]
+      summary: List debts (paginated)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDING, PARTIAL, PAID, OVERDUE] }
+        - name: due_from
+          in: query
+          schema: { type: string, format: date }
+        - name: due_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Paginated list of debts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ListResponseDebt' }
+        '401':
+          description: Unauthorized
+    post:
+      tags: [debts]
+      summary: Create debt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDebtRequest' }
+      responses:
+        '201':
+          description: Debt created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Debt' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+
+  /debts/{uuid}/payments:
+    get:
+      tags: [debts]
+      summary: List payments for a debt
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: List of debt payments
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/DebtPayment' } }
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    post:
+      tags: [debts]
+      summary: Record a debt payment (installment)
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDebtPaymentRequest' }
+      responses:
+        '201':
+          description: Payment recorded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/DebtPayment' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  /debts/{uuid}:
+    get:
+      tags: [debts]
+      summary: Get debt by UUID
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Debt by UUID
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Debt' }
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    put:
+      tags: [debts]
+      summary: Update debt
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateDebtRequest' }
+      responses:
+        '200':
+          description: Debt updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Debt' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    delete:
+      tags: [debts]
+      summary: Delete debt
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  # --- Receivables ---
+  /receivables:
+    get:
+      tags: [receivables]
+      summary: List receivables (paginated)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDING, PARTIAL, PAID, OVERDUE] }
+        - name: due_from
+          in: query
+          schema: { type: string, format: date }
+        - name: due_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Paginated list of receivables
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ListResponseReceivable' }
+        '401':
+          description: Unauthorized
+    post:
+      tags: [receivables]
+      summary: Create receivable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReceivableRequest' }
+      responses:
+        '201':
+          description: Receivable created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Receivable' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+
+  /receivables/{uuid}/payments:
+    get:
+      tags: [receivables]
+      summary: List payments for a receivable
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: List of receivable payments
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/ReceivablePayment' } }
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    post:
+      tags: [receivables]
+      summary: Record a receivable payment (installment)
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReceivablePaymentRequest' }
+      responses:
+        '201':
+          description: Payment recorded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ReceivablePayment' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  /receivables/{uuid}:
+    get:
+      tags: [receivables]
+      summary: Get receivable by UUID
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Receivable by UUID
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Receivable' }
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    put:
+      tags: [receivables]
+      summary: Update receivable
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateReceivableRequest' }
+      responses:
+        '200':
+          description: Receivable updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Receivable' }
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    delete:
+      tags: [receivables]
+      summary: Delete receivable
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
   # --- Portfolio ---
   /portfolio:
     get:
@@ -1119,6 +1449,120 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
+    CreateDebtRequest:
+      type: object
+      required: [partyName, amount]
+      properties:
+        partyName: { type: string }
+        amount: { type: number }
+        dueDate: { type: string, format: date-time, nullable: true }
+        note: { type: string, nullable: true }
+        assetUuid: { type: string, format: uuid, nullable: true }
+
+    UpdateDebtRequest:
+      type: object
+      properties:
+        partyName: { type: string, nullable: true }
+        amount: { type: number, nullable: true }
+        dueDate: { type: string, format: date-time, nullable: true }
+        note: { type: string, nullable: true }
+        assetUuid: { type: string, format: uuid, nullable: true }
+
+    CreateDebtPaymentRequest:
+      type: object
+      required: [amount, date]
+      properties:
+        amount: { type: number }
+        date: { type: string, format: date-time }
+        note: { type: string, nullable: true }
+        assetUuid: { type: string, format: uuid, nullable: true }
+
+    Debt:
+      type: object
+      properties:
+        uuid: { type: string }
+        partyName: { type: string }
+        amount: { type: number }
+        paidAmount: { type: number }
+        dueDate: { type: string, format: date-time, nullable: true }
+        status: { type: string, enum: [PENDING, PARTIAL, PAID, OVERDUE] }
+        note: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        asset: { $ref: '#/components/schemas/Asset', nullable: true }
+
+    DebtPayment:
+      type: object
+      properties:
+        uuid: { type: string }
+        amount: { type: number }
+        date: { type: string, format: date-time }
+        note: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    ListResponseDebt:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Debt' } }
+        meta: { $ref: '#/components/schemas/ListMeta' }
+
+    CreateReceivableRequest:
+      type: object
+      required: [partyName, amount]
+      properties:
+        partyName: { type: string }
+        amount: { type: number }
+        dueDate: { type: string, format: date-time, nullable: true }
+        note: { type: string, nullable: true }
+        assetUuid: { type: string, format: uuid, nullable: true }
+
+    UpdateReceivableRequest:
+      type: object
+      properties:
+        partyName: { type: string, nullable: true }
+        amount: { type: number, nullable: true }
+        dueDate: { type: string, format: date-time, nullable: true }
+        note: { type: string, nullable: true }
+        assetUuid: { type: string, format: uuid, nullable: true }
+
+    CreateReceivablePaymentRequest:
+      type: object
+      required: [amount, date]
+      properties:
+        amount: { type: number }
+        date: { type: string, format: date-time }
+        note: { type: string, nullable: true }
+        assetUuid: { type: string, format: uuid, nullable: true }
+
+    Receivable:
+      type: object
+      properties:
+        uuid: { type: string }
+        partyName: { type: string }
+        amount: { type: number }
+        paidAmount: { type: number }
+        dueDate: { type: string, format: date-time, nullable: true }
+        status: { type: string, enum: [PENDING, PARTIAL, PAID, OVERDUE] }
+        note: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        asset: { $ref: '#/components/schemas/Asset', nullable: true }
+
+    ReceivablePayment:
+      type: object
+      properties:
+        uuid: { type: string }
+        amount: { type: number }
+        date: { type: string, format: date-time }
+        note: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    ListResponseReceivable:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Receivable' } }
+        meta: { $ref: '#/components/schemas/ListMeta' }
+
     Asset:
       type: object
       properties:
@@ -1227,3 +1671,7 @@ components:
           type: array
           items: { $ref: '#/components/schemas/MonthlyTrendPoint' }
           description: Last 12 months, oldest first (for line/area charts)
+        totalDebt: { type: number, description: Sum of unpaid debt (amount - paidAmount where status != PAID) }
+        totalReceivable: { type: number, description: Sum of unpaid receivable }
+        debtOverdueCount: { type: integer, description: Count of debts with due_date in the past and not PAID }
+        receivableOverdueCount: { type: integer, description: Count of receivables overdue }

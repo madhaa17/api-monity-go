@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -11,81 +10,61 @@ import (
 	"monity/internal/core/port"
 	"monity/internal/models"
 	"monity/internal/pkg/validation"
-
-	"github.com/shopspring/decimal"
 )
+
+// Removing or shrinking an income takes money back out of the CASH asset, which may already be spent.
+const incomeInsufficientMsg = "this change would make the cash asset balance negative"
 
 type IncomeService struct {
 	repo      port.IncomeRepository
 	assetRepo port.AssetRepository
+	tx        port.Transactor
 }
 
-func NewIncomeService(repo port.IncomeRepository, assetRepo port.AssetRepository) port.IncomeService {
-	return &IncomeService{repo: repo, assetRepo: assetRepo}
-}
-
-// lookupCashAsset validates that the asset exists, belongs to the user, and is type CASH.
-func (s *IncomeService) lookupCashAsset(ctx context.Context, assetUUID string, userID int64) (*models.Asset, error) {
-	if strings.TrimSpace(assetUUID) == "" {
-		return nil, errors.New("assetUuid is required")
-	}
-	asset, err := s.assetRepo.GetByUUID(ctx, assetUUID, userID)
-	if err != nil {
-		return nil, fmt.Errorf("get asset: %w", err)
-	}
-	if asset == nil {
-		return nil, errors.New("asset not found")
-	}
-	if asset.Type != models.AssetTypeCash {
-		return nil, errors.New("asset must be of type CASH")
-	}
-	return asset, nil
+func NewIncomeService(repo port.IncomeRepository, assetRepo port.AssetRepository, tx port.Transactor) port.IncomeService {
+	return &IncomeService{repo: repo, assetRepo: assetRepo, tx: tx}
 }
 
 func (s *IncomeService) CreateIncome(ctx context.Context, userID int64, req port.CreateIncomeRequest) (*models.Income, error) {
-	if req.Amount <= 0 {
-		return nil, errors.New("amount must be positive")
+	if err := validateCashAmount(req.Amount); err != nil {
+		return nil, err
 	}
-	if strings.TrimSpace(req.Source) == "" {
-		return nil, errors.New("source is required")
+	if err := validateIncomeSource(req.Source); err != nil {
+		return nil, err
 	}
-	if err := validation.CheckMaxLen(req.Source, validation.MaxSourceLen); err != nil {
-		return nil, fmt.Errorf("source %w", err)
+	if err := validateTransactionDate(req.Date); err != nil {
+		return nil, err
 	}
-	if req.Note != nil {
-		if err := validation.CheckMaxLen(*req.Note, validation.MaxNoteLen); err != nil {
-			return nil, fmt.Errorf("note %w", err)
-		}
-	}
-
-	asset, err := s.lookupCashAsset(ctx, req.AssetUUID, userID)
-	if err != nil {
+	if err := validateNote(req.Note); err != nil {
 		return nil, err
 	}
 
-	amount := decimal.NewFromFloat(req.Amount)
-
-	// Add to CASH asset
-	oldQty := asset.Quantity
-	asset.Quantity = asset.Quantity.Add(amount)
-	if err := s.assetRepo.Update(ctx, asset); err != nil {
-		return nil, fmt.Errorf("update asset balance: %w", err)
+	var income *models.Income
+	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		asset, err := lookupCashAsset(ctx, s.assetRepo, req.AssetUUID, userID)
+		if err != nil {
+			return err
+		}
+		if err := adjustCashBalance(ctx, s.assetRepo, asset.ID, req.Amount, incomeInsufficientMsg); err != nil {
+			return err
+		}
+		income = &models.Income{
+			UserID:  userID,
+			AssetID: asset.ID,
+			Amount:  req.Amount,
+			Source:  req.Source,
+			Note:    req.Note,
+			Date:    req.Date,
+		}
+		if err := s.repo.Create(ctx, income); err != nil {
+			return fmt.Errorf("create income: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	slog.Info("balance_updated", "asset_uuid", asset.UUID, "old", oldQty.String(), "new", asset.Quantity.String())
-
-	income := &models.Income{
-		UserID:  userID,
-		AssetID: asset.ID,
-		Amount:  amount,
-		Source:  req.Source,
-		Note:    req.Note,
-		Date:    req.Date,
-	}
-
-	if err := s.repo.Create(ctx, income); err != nil {
-		return nil, fmt.Errorf("create income: %w", err)
-	}
-	slog.Info("income_created", "user_id", userID, "amount", req.Amount, "source", req.Source, "asset_uuid", req.AssetUUID)
+	slog.Info("income_created", "user_id", userID, "amount", req.Amount.String(), "source", req.Source, "asset_uuid", req.AssetUUID)
 	return income, nil
 }
 
@@ -95,21 +74,13 @@ func (s *IncomeService) GetIncome(ctx context.Context, userID int64, uuid string
 		return nil, fmt.Errorf("get income: %w", err)
 	}
 	if income == nil {
-		return nil, errors.New("income not found")
+		return nil, fmt.Errorf("income: %w", port.ErrNotFound)
 	}
 	return income, nil
 }
 
 func (s *IncomeService) ListIncomes(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Income, port.ListMeta, error) {
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
+	page, limit = normalizePageLimit(page, limit)
 	incomes, total, err := s.repo.ListByUserID(ctx, userID, dateFrom, dateTo, page, limit)
 	if err != nil {
 		return nil, port.ListMeta{}, fmt.Errorf("list incomes: %w", err)
@@ -117,129 +88,118 @@ func (s *IncomeService) ListIncomes(ctx context.Context, userID int64, dateFrom,
 	if incomes == nil {
 		incomes = []models.Income{}
 	}
-	totalPages := int((total + int64(limit) - 1) / int64(limit))
-	if totalPages < 0 {
-		totalPages = 0
-	}
-	meta := port.ListMeta{Total: total, Page: page, Limit: limit, TotalPages: totalPages}
-	return incomes, meta, nil
+	return incomes, listMeta(total, page, limit), nil
 }
 
 func (s *IncomeService) UpdateIncome(ctx context.Context, userID int64, uuid string, req port.UpdateIncomeRequest) (*models.Income, error) {
-	income, err := s.GetIncome(ctx, userID, uuid)
-	if err != nil {
+	if req.Amount != nil {
+		if err := validateCashAmount(*req.Amount); err != nil {
+			return nil, err
+		}
+	}
+	if req.Source != nil {
+		if err := validateIncomeSource(*req.Source); err != nil {
+			return nil, err
+		}
+	}
+	if req.Date != nil {
+		if err := validateTransactionDate(*req.Date); err != nil {
+			return nil, err
+		}
+	}
+	if err := validateNote(req.Note); err != nil {
 		return nil, err
 	}
 
-	oldAmount := income.Amount
-	oldAssetID := income.AssetID
-
-	// Update fields
-	if req.Amount != nil {
-		if *req.Amount <= 0 {
-			return nil, errors.New("amount must be positive")
-		}
-		income.Amount = decimal.NewFromFloat(*req.Amount)
-	}
-	if req.Source != nil {
-		if strings.TrimSpace(*req.Source) == "" {
-			return nil, errors.New("source cannot be empty")
-		}
-		if err := validation.CheckMaxLen(*req.Source, validation.MaxSourceLen); err != nil {
-			return nil, fmt.Errorf("source %w", err)
-		}
-		income.Source = *req.Source
-	}
-	if req.Note != nil {
-		if err := validation.CheckMaxLen(*req.Note, validation.MaxNoteLen); err != nil {
-			return nil, fmt.Errorf("note %w", err)
-		}
-		income.Note = req.Note
-	}
-	if req.Date != nil {
-		income.Date = *req.Date
-	}
-
-	// Adjust CASH asset balances
-	if req.AssetUUID != nil {
-		newAsset, err := s.lookupCashAsset(ctx, *req.AssetUUID, userID)
+	var income *models.Income
+	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		var err error
+		income, err = s.repo.GetByUUIDForUpdate(ctx, uuid, userID)
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("get income: %w", err)
+		}
+		if income == nil {
+			return fmt.Errorf("income: %w", port.ErrNotFound)
 		}
 
-		if newAsset.ID != oldAssetID {
-			// Reverse old asset: subtract old amount
-			oldAsset, err := s.assetRepo.GetByID(ctx, oldAssetID)
+		oldAmount, oldAssetID := income.Amount, income.AssetID
+		newAssetID := oldAssetID
+		if req.AssetUUID != nil {
+			asset, err := lookupCashAsset(ctx, s.assetRepo, *req.AssetUUID, userID)
 			if err != nil {
-				return nil, fmt.Errorf("get old asset: %w", err)
+				return err
 			}
-			if oldAsset != nil {
-				oldAsset.Quantity = oldAsset.Quantity.Sub(oldAmount)
-				if err := s.assetRepo.Update(ctx, oldAsset); err != nil {
-					return nil, fmt.Errorf("reverse old asset balance: %w", err)
-				}
-			}
-
-			// Add new amount to new asset
-			newAsset.Quantity = newAsset.Quantity.Add(income.Amount)
-			if err := s.assetRepo.Update(ctx, newAsset); err != nil {
-				return nil, fmt.Errorf("update new asset balance: %w", err)
-			}
-			income.AssetID = newAsset.ID
-		} else {
-			// Same asset, adjust difference
-			diff := income.Amount.Sub(oldAmount) // positive = more income
-			if !diff.IsZero() {
-				newAsset.Quantity = newAsset.Quantity.Add(diff)
-				if err := s.assetRepo.Update(ctx, newAsset); err != nil {
-					return nil, fmt.Errorf("update asset balance: %w", err)
-				}
-			}
+			newAssetID = asset.ID
 		}
-	} else if req.Amount != nil {
-		// Only amount changed, same asset
-		diff := income.Amount.Sub(oldAmount)
-		if !diff.IsZero() {
-			asset, err := s.assetRepo.GetByID(ctx, oldAssetID)
-			if err != nil {
-				return nil, fmt.Errorf("get asset: %w", err)
-			}
-			if asset != nil {
-				asset.Quantity = asset.Quantity.Add(diff)
-				if err := s.assetRepo.Update(ctx, asset); err != nil {
-					return nil, fmt.Errorf("update asset balance: %w", err)
-				}
-			}
+		if req.Amount != nil {
+			income.Amount = *req.Amount
 		}
-	}
 
-	if err := s.repo.Update(ctx, income); err != nil {
-		return nil, fmt.Errorf("update income: %w", err)
+		if newAssetID != oldAssetID {
+			// Take the income back out of the old asset, then put it into the new one.
+			if err := adjustCashBalance(ctx, s.assetRepo, oldAssetID, oldAmount.Neg(), incomeInsufficientMsg); err != nil {
+				return err
+			}
+			if err := adjustCashBalance(ctx, s.assetRepo, newAssetID, income.Amount, incomeInsufficientMsg); err != nil {
+				return err
+			}
+		} else if err := adjustCashBalance(ctx, s.assetRepo, oldAssetID, income.Amount.Sub(oldAmount), incomeInsufficientMsg); err != nil {
+			return err
+		}
+
+		income.AssetID = newAssetID
+		if req.Source != nil {
+			income.Source = *req.Source
+		}
+		if req.Note != nil {
+			income.Note = req.Note
+		}
+		if req.Date != nil {
+			income.Date = *req.Date
+		}
+		if err := s.repo.Update(ctx, income); err != nil {
+			return fmt.Errorf("update income: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return income, nil
 }
 
 func (s *IncomeService) DeleteIncome(ctx context.Context, userID int64, uuid string) error {
-	income, err := s.GetIncome(ctx, userID, uuid)
+	var income *models.Income
+	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		var err error
+		income, err = s.repo.GetByUUIDForUpdate(ctx, uuid, userID)
+		if err != nil {
+			return fmt.Errorf("get income: %w", err)
+		}
+		if income == nil {
+			return fmt.Errorf("income: %w", port.ErrNotFound)
+		}
+		if err := adjustCashBalance(ctx, s.assetRepo, income.AssetID, income.Amount.Neg(), incomeInsufficientMsg); err != nil {
+			return err
+		}
+		if err := s.repo.Delete(ctx, uuid, userID); err != nil {
+			return fmt.Errorf("delete income: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-
-	// Reverse CASH asset balance
-	asset, err := s.assetRepo.GetByID(ctx, income.AssetID)
-	if err != nil {
-		return fmt.Errorf("get asset: %w", err)
-	}
-	if asset != nil {
-		asset.Quantity = asset.Quantity.Sub(income.Amount)
-		if err := s.assetRepo.Update(ctx, asset); err != nil {
-			return fmt.Errorf("reverse asset balance: %w", err)
-		}
-	}
-
-	if err := s.repo.Delete(ctx, uuid, userID); err != nil {
-		return fmt.Errorf("delete income: %w", err)
-	}
 	slog.Info("income_deleted", "user_id", userID, "uuid", uuid, "amount", income.Amount.String())
+	return nil
+}
+
+func validateIncomeSource(source string) error {
+	if strings.TrimSpace(source) == "" {
+		return port.NewValidationError("source is required")
+	}
+	if err := validation.CheckMaxLen(source, validation.MaxSourceLen); err != nil {
+		return port.NewValidationError("source " + err.Error())
+	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"monity/internal/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type ExpenseRepo struct {
@@ -21,7 +22,7 @@ func NewExpenseRepository(db *gorm.DB) port.ExpenseRepository {
 }
 
 func (r *ExpenseRepo) Create(ctx context.Context, expense *models.Expense) error {
-	result := r.db.WithContext(ctx).Create(expense)
+	result := conn(ctx, r.db).Create(expense)
 	if result.Error != nil {
 		return fmt.Errorf("create expense: %w", result.Error)
 	}
@@ -29,8 +30,16 @@ func (r *ExpenseRepo) Create(ctx context.Context, expense *models.Expense) error
 }
 
 func (r *ExpenseRepo) GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Expense, error) {
+	return r.getByUUID(conn(ctx, r.db), uuid, userID)
+}
+
+func (r *ExpenseRepo) GetByUUIDForUpdate(ctx context.Context, uuid string, userID int64) (*models.Expense, error) {
+	return r.getByUUID(conn(ctx, r.db).Clauses(clause.Locking{Strength: "UPDATE"}), uuid, userID)
+}
+
+func (r *ExpenseRepo) getByUUID(db *gorm.DB, uuid string, userID int64) (*models.Expense, error) {
 	var expense models.Expense
-	result := r.db.WithContext(ctx).Where("uuid = ? AND user_id = ?", uuid, userID).First(&expense)
+	result := db.Where("uuid = ? AND user_id = ?", uuid, userID).First(&expense)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -41,7 +50,7 @@ func (r *ExpenseRepo) GetByUUID(ctx context.Context, uuid string, userID int64) 
 }
 
 func (r *ExpenseRepo) ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Expense, int64, error) {
-	q := r.db.WithContext(ctx).Model(&models.Expense{}).Where("user_id = ?", userID)
+	q := conn(ctx, r.db).Model(&models.Expense{}).Where("user_id = ?", userID)
 	if dateFrom != nil {
 		q = q.Where("date >= ?", dateFrom)
 	}
@@ -58,7 +67,7 @@ func (r *ExpenseRepo) ListByUserID(ctx context.Context, userID int64, dateFrom, 
 	if offset < 0 {
 		offset = 0
 	}
-	result := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("date desc, created_at desc")
+	result := conn(ctx, r.db).Where("user_id = ?", userID).Order("date desc, created_at desc")
 	if dateFrom != nil {
 		result = result.Where("date >= ?", dateFrom)
 	}
@@ -74,7 +83,7 @@ func (r *ExpenseRepo) ListByUserID(ctx context.Context, userID int64, dateFrom, 
 }
 
 func (r *ExpenseRepo) Update(ctx context.Context, expense *models.Expense) error {
-	result := r.db.WithContext(ctx).Save(expense)
+	result := conn(ctx, r.db).Save(expense)
 	if result.Error != nil {
 		return fmt.Errorf("update expense: %w", result.Error)
 	}
@@ -82,12 +91,12 @@ func (r *ExpenseRepo) Update(ctx context.Context, expense *models.Expense) error
 }
 
 func (r *ExpenseRepo) Delete(ctx context.Context, uuid string, userID int64) error {
-	result := r.db.WithContext(ctx).Where("uuid = ? AND user_id = ?", uuid, userID).Delete(&models.Expense{})
+	result := conn(ctx, r.db).Where("uuid = ? AND user_id = ?", uuid, userID).Delete(&models.Expense{})
 	if result.Error != nil {
 		return fmt.Errorf("delete expense: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("expense not found or not owned by user")
+		return fmt.Errorf("delete expense: %w", port.ErrNotFound)
 	}
 	return nil
 }

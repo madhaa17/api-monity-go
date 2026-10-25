@@ -31,18 +31,9 @@ func (h *ExpenseHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Amount <= 0 || req.Category == "" {
-		response.ErrorWithLog(w, r, http.StatusBadRequest, "missing required fields", nil)
-		return
-	}
-
 	expense, err := h.svc.CreateExpense(r.Context(), userID, req)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "must be") || strings.Contains(err.Error(), "exceed") {
-			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
-			return
-		}
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to create expense", err.Error())
+		writeServiceError(w, r, err, "expense not found", "failed to create expense")
 		return
 	}
 
@@ -80,11 +71,7 @@ func (h *ExpenseHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	expense, err := h.svc.GetExpense(r.Context(), userID, uuid)
 	if err != nil {
-		if err.Error() == "expense not found" {
-			response.ErrorWithLog(w, r, http.StatusNotFound, "expense not found", nil)
-			return
-		}
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to get expense", err.Error())
+		writeServiceError(w, r, err, "expense not found", "failed to get expense")
 		return
 	}
 
@@ -112,15 +99,7 @@ func (h *ExpenseHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	expense, err := h.svc.UpdateExpense(r.Context(), userID, uuid, req)
 	if err != nil {
-		if err.Error() == "expense not found" {
-			response.ErrorWithLog(w, r, http.StatusNotFound, "expense not found", nil)
-			return
-		}
-		if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "must be") || strings.Contains(err.Error(), "exceed") {
-			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
-			return
-		}
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to update expense", err.Error())
+		writeServiceError(w, r, err, "expense not found", "failed to update expense")
 		return
 	}
 
@@ -141,11 +120,7 @@ func (h *ExpenseHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.DeleteExpense(r.Context(), userID, uuid); err != nil {
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not owned") {
-			response.ErrorWithLog(w, r, http.StatusNotFound, "expense not found", nil)
-			return
-		}
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to delete expense", err.Error())
+		writeServiceError(w, r, err, "expense not found", "failed to delete expense")
 		return
 	}
 

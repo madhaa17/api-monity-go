@@ -4,11 +4,15 @@ import (
 	"context"
 	"monity/internal/models"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 type ExpenseRepository interface {
 	Create(ctx context.Context, expense *models.Expense) error
 	GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Expense, error)
+	// GetByUUIDForUpdate is GetByUUID with a row lock; call it inside Transactor.WithinTransaction.
+	GetByUUIDForUpdate(ctx context.Context, uuid string, userID int64) (*models.Expense, error)
 	ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Expense, int64, error)
 	Update(ctx context.Context, expense *models.Expense) error
 	Delete(ctx context.Context, uuid string, userID int64) error
@@ -24,7 +28,7 @@ type ExpenseService interface {
 
 type CreateExpenseRequest struct {
 	AssetUUID string                 `json:"assetUuid"`
-	Amount    float64                `json:"amount"`
+	Amount    decimal.Decimal        `json:"amount"`
 	Category  models.ExpenseCategory `json:"category"`
 	Note      *string                `json:"note,omitempty"`
 	Date      time.Time              `json:"date"`
@@ -32,7 +36,7 @@ type CreateExpenseRequest struct {
 
 type UpdateExpenseRequest struct {
 	AssetUUID *string                 `json:"assetUuid,omitempty"`
-	Amount    *float64                `json:"amount,omitempty"`
+	Amount    *decimal.Decimal        `json:"amount,omitempty"`
 	Category  *models.ExpenseCategory `json:"category,omitempty"`
 	Note      *string                 `json:"note,omitempty"`
 	Date      *time.Time              `json:"date,omitempty"`

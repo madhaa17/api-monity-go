@@ -3,6 +3,8 @@ package port
 import (
 	"context"
 	"monity/internal/models"
+
+	"github.com/shopspring/decimal"
 )
 
 type AssetRepository interface {
@@ -11,6 +13,9 @@ type AssetRepository interface {
 	GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Asset, error)
 	ListByUserID(ctx context.Context, userID int64, page, limit int) ([]models.Asset, int64, error)
 	Update(ctx context.Context, asset *models.Asset) error
+	// AdjustQuantity atomically adds delta to the asset's quantity. It returns ErrInsufficientBalance
+	// if the result would be negative, and ErrNotFound if the asset does not exist.
+	AdjustQuantity(ctx context.Context, assetID int64, delta decimal.Decimal) error
 	Delete(ctx context.Context, uuid string, userID int64) error
 }
 

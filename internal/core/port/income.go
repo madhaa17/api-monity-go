@@ -4,11 +4,15 @@ import (
 	"context"
 	"monity/internal/models"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 type IncomeRepository interface {
 	Create(ctx context.Context, income *models.Income) error
 	GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Income, error)
+	// GetByUUIDForUpdate is GetByUUID with a row lock; call it inside Transactor.WithinTransaction.
+	GetByUUIDForUpdate(ctx context.Context, uuid string, userID int64) (*models.Income, error)
 	ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Income, int64, error)
 	Update(ctx context.Context, income *models.Income) error
 	Delete(ctx context.Context, uuid string, userID int64) error
@@ -23,17 +27,17 @@ type IncomeService interface {
 }
 
 type CreateIncomeRequest struct {
-	AssetUUID string    `json:"assetUuid"`
-	Amount    float64   `json:"amount"`
-	Source    string    `json:"source"`
-	Note      *string   `json:"note,omitempty"`
-	Date      time.Time `json:"date"`
+	AssetUUID string          `json:"assetUuid"`
+	Amount    decimal.Decimal `json:"amount"`
+	Source    string          `json:"source"`
+	Note      *string         `json:"note,omitempty"`
+	Date      time.Time       `json:"date"`
 }
 
 type UpdateIncomeRequest struct {
-	AssetUUID *string    `json:"assetUuid,omitempty"`
-	Amount    *float64   `json:"amount,omitempty"`
-	Source    *string    `json:"source,omitempty"`
-	Note      *string    `json:"note,omitempty"`
-	Date      *time.Time `json:"date,omitempty"`
+	AssetUUID *string          `json:"assetUuid,omitempty"`
+	Amount    *decimal.Decimal `json:"amount,omitempty"`
+	Source    *string          `json:"source,omitempty"`
+	Note      *string          `json:"note,omitempty"`
+	Date      *time.Time       `json:"date,omitempty"`
 }

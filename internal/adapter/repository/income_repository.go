@@ -10,6 +10,7 @@ import (
 	"monity/internal/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type IncomeRepo struct {
@@ -21,7 +22,7 @@ func NewIncomeRepository(db *gorm.DB) port.IncomeRepository {
 }
 
 func (r *IncomeRepo) Create(ctx context.Context, income *models.Income) error {
-	result := r.db.WithContext(ctx).Create(income)
+	result := conn(ctx, r.db).Create(income)
 	if result.Error != nil {
 		return fmt.Errorf("create income: %w", result.Error)
 	}
@@ -29,8 +30,16 @@ func (r *IncomeRepo) Create(ctx context.Context, income *models.Income) error {
 }
 
 func (r *IncomeRepo) GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Income, error) {
+	return r.getByUUID(conn(ctx, r.db), uuid, userID)
+}
+
+func (r *IncomeRepo) GetByUUIDForUpdate(ctx context.Context, uuid string, userID int64) (*models.Income, error) {
+	return r.getByUUID(conn(ctx, r.db).Clauses(clause.Locking{Strength: "UPDATE"}), uuid, userID)
+}
+
+func (r *IncomeRepo) getByUUID(db *gorm.DB, uuid string, userID int64) (*models.Income, error) {
 	var income models.Income
-	result := r.db.WithContext(ctx).Where("uuid = ? AND user_id = ?", uuid, userID).First(&income)
+	result := db.Where("uuid = ? AND user_id = ?", uuid, userID).First(&income)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -41,7 +50,7 @@ func (r *IncomeRepo) GetByUUID(ctx context.Context, uuid string, userID int64) (
 }
 
 func (r *IncomeRepo) ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Income, int64, error) {
-	q := r.db.WithContext(ctx).Model(&models.Income{}).Where("user_id = ?", userID)
+	q := conn(ctx, r.db).Model(&models.Income{}).Where("user_id = ?", userID)
 	if dateFrom != nil {
 		q = q.Where("date >= ?", dateFrom)
 	}
@@ -58,7 +67,7 @@ func (r *IncomeRepo) ListByUserID(ctx context.Context, userID int64, dateFrom, d
 	if offset < 0 {
 		offset = 0
 	}
-	result := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("date desc, created_at desc")
+	result := conn(ctx, r.db).Where("user_id = ?", userID).Order("date desc, created_at desc")
 	if dateFrom != nil {
 		result = result.Where("date >= ?", dateFrom)
 	}
@@ -74,7 +83,7 @@ func (r *IncomeRepo) ListByUserID(ctx context.Context, userID int64, dateFrom, d
 }
 
 func (r *IncomeRepo) Update(ctx context.Context, income *models.Income) error {
-	result := r.db.WithContext(ctx).Save(income)
+	result := conn(ctx, r.db).Save(income)
 	if result.Error != nil {
 		return fmt.Errorf("update income: %w", result.Error)
 	}
@@ -82,12 +91,12 @@ func (r *IncomeRepo) Update(ctx context.Context, income *models.Income) error {
 }
 
 func (r *IncomeRepo) Delete(ctx context.Context, uuid string, userID int64) error {
-	result := r.db.WithContext(ctx).Where("uuid = ? AND user_id = ?", uuid, userID).Delete(&models.Income{})
+	result := conn(ctx, r.db).Where("uuid = ? AND user_id = ?", uuid, userID).Delete(&models.Income{})
 	if result.Error != nil {
 		return fmt.Errorf("delete income: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("income not found or not owned by user")
+		return fmt.Errorf("delete income: %w", port.ErrNotFound)
 	}
 	return nil
 }

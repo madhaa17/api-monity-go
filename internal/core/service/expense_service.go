@@ -2,90 +2,66 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"monity/internal/core/port"
 	"monity/internal/models"
-	"monity/internal/pkg/validation"
-
-	"github.com/shopspring/decimal"
 )
+
+const expenseInsufficientMsg = "expense amount cannot exceed the selected asset balance"
 
 type ExpenseService struct {
 	repo      port.ExpenseRepository
 	assetRepo port.AssetRepository
+	tx        port.Transactor
 }
 
-func NewExpenseService(repo port.ExpenseRepository, assetRepo port.AssetRepository) port.ExpenseService {
-	return &ExpenseService{repo: repo, assetRepo: assetRepo}
-}
-
-// lookupCashAsset validates that the asset exists, belongs to the user, and is type CASH.
-func (s *ExpenseService) lookupCashAsset(ctx context.Context, assetUUID string, userID int64) (*models.Asset, error) {
-	if strings.TrimSpace(assetUUID) == "" {
-		return nil, errors.New("assetUuid is required")
-	}
-	asset, err := s.assetRepo.GetByUUID(ctx, assetUUID, userID)
-	if err != nil {
-		return nil, fmt.Errorf("get asset: %w", err)
-	}
-	if asset == nil {
-		return nil, errors.New("asset not found")
-	}
-	if asset.Type != models.AssetTypeCash {
-		return nil, errors.New("asset must be of type CASH")
-	}
-	return asset, nil
+func NewExpenseService(repo port.ExpenseRepository, assetRepo port.AssetRepository, tx port.Transactor) port.ExpenseService {
+	return &ExpenseService{repo: repo, assetRepo: assetRepo, tx: tx}
 }
 
 func (s *ExpenseService) CreateExpense(ctx context.Context, userID int64, req port.CreateExpenseRequest) (*models.Expense, error) {
-	if req.Amount <= 0 {
-		return nil, errors.New("amount must be positive")
+	if err := validateCashAmount(req.Amount); err != nil {
+		return nil, err
 	}
 	if !isValidExpenseCategory(req.Category) {
-		return nil, errors.New("invalid expense category")
+		return nil, port.NewValidationError("invalid expense category")
 	}
-	if req.Note != nil {
-		if err := validation.CheckMaxLen(*req.Note, validation.MaxNoteLen); err != nil {
-			return nil, fmt.Errorf("note %w", err)
-		}
+	if err := validateTransactionDate(req.Date); err != nil {
+		return nil, err
 	}
-
-	asset, err := s.lookupCashAsset(ctx, req.AssetUUID, userID)
-	if err != nil {
+	if err := validateNote(req.Note); err != nil {
 		return nil, err
 	}
 
-	amount := decimal.NewFromFloat(req.Amount)
-	if amount.GreaterThan(asset.Quantity) {
-		return nil, errors.New("expense amount cannot exceed the selected asset balance")
+	var expense *models.Expense
+	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		asset, err := lookupCashAsset(ctx, s.assetRepo, req.AssetUUID, userID)
+		if err != nil {
+			return err
+		}
+		if err := adjustCashBalance(ctx, s.assetRepo, asset.ID, req.Amount.Neg(), expenseInsufficientMsg); err != nil {
+			return err
+		}
+		expense = &models.Expense{
+			UserID:   userID,
+			AssetID:  asset.ID,
+			Amount:   req.Amount,
+			Category: req.Category,
+			Note:     req.Note,
+			Date:     req.Date,
+		}
+		if err := s.repo.Create(ctx, expense); err != nil {
+			return fmt.Errorf("create expense: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	// Deduct from CASH asset
-	oldQty := asset.Quantity
-	asset.Quantity = asset.Quantity.Sub(amount)
-	if err := s.assetRepo.Update(ctx, asset); err != nil {
-		return nil, fmt.Errorf("update asset balance: %w", err)
-	}
-	slog.Info("balance_updated", "asset_uuid", asset.UUID, "old", oldQty.String(), "new", asset.Quantity.String())
-
-	expense := &models.Expense{
-		UserID:   userID,
-		AssetID:  asset.ID,
-		Amount:   amount,
-		Category: req.Category,
-		Note:     req.Note,
-		Date:     req.Date,
-	}
-
-	if err := s.repo.Create(ctx, expense); err != nil {
-		return nil, fmt.Errorf("create expense: %w", err)
-	}
-	slog.Info("expense_created", "user_id", userID, "amount", req.Amount, "category", req.Category, "asset_uuid", req.AssetUUID)
+	slog.Info("expense_created", "user_id", userID, "amount", req.Amount.String(), "category", req.Category, "asset_uuid", req.AssetUUID)
 	return expense, nil
 }
 
@@ -95,21 +71,13 @@ func (s *ExpenseService) GetExpense(ctx context.Context, userID int64, uuid stri
 		return nil, fmt.Errorf("get expense: %w", err)
 	}
 	if expense == nil {
-		return nil, errors.New("expense not found")
+		return nil, fmt.Errorf("expense: %w", port.ErrNotFound)
 	}
 	return expense, nil
 }
 
 func (s *ExpenseService) ListExpenses(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Expense, port.ListMeta, error) {
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
+	page, limit = normalizePageLimit(page, limit)
 	expenses, total, err := s.repo.ListByUserID(ctx, userID, dateFrom, dateTo, page, limit)
 	if err != nil {
 		return nil, port.ListMeta{}, fmt.Errorf("list expenses: %w", err)
@@ -117,134 +85,106 @@ func (s *ExpenseService) ListExpenses(ctx context.Context, userID int64, dateFro
 	if expenses == nil {
 		expenses = []models.Expense{}
 	}
-	totalPages := int((total + int64(limit) - 1) / int64(limit))
-	if totalPages < 0 {
-		totalPages = 0
-	}
-	meta := port.ListMeta{Total: total, Page: page, Limit: limit, TotalPages: totalPages}
-	return expenses, meta, nil
+	return expenses, listMeta(total, page, limit), nil
 }
 
 func (s *ExpenseService) UpdateExpense(ctx context.Context, userID int64, uuid string, req port.UpdateExpenseRequest) (*models.Expense, error) {
-	expense, err := s.GetExpense(ctx, userID, uuid)
-	if err != nil {
+	if req.Amount != nil {
+		if err := validateCashAmount(*req.Amount); err != nil {
+			return nil, err
+		}
+	}
+	if req.Category != nil && !isValidExpenseCategory(*req.Category) {
+		return nil, port.NewValidationError("invalid expense category")
+	}
+	if req.Date != nil {
+		if err := validateTransactionDate(*req.Date); err != nil {
+			return nil, err
+		}
+	}
+	if err := validateNote(req.Note); err != nil {
 		return nil, err
 	}
 
-	oldAmount := expense.Amount
-	oldAssetID := expense.AssetID
-
-	// Update fields
-	if req.Amount != nil {
-		if *req.Amount <= 0 {
-			return nil, errors.New("amount must be positive")
-		}
-		expense.Amount = decimal.NewFromFloat(*req.Amount)
-	}
-	if req.Category != nil {
-		if !isValidExpenseCategory(*req.Category) {
-			return nil, errors.New("invalid expense category")
-		}
-		expense.Category = *req.Category
-	}
-	if req.Note != nil {
-		if err := validation.CheckMaxLen(*req.Note, validation.MaxNoteLen); err != nil {
-			return nil, fmt.Errorf("note %w", err)
-		}
-		expense.Note = req.Note
-	}
-	if req.Date != nil {
-		expense.Date = *req.Date
-	}
-
-	// Adjust CASH asset balances
-	if req.AssetUUID != nil {
-		newAsset, err := s.lookupCashAsset(ctx, *req.AssetUUID, userID)
+	var expense *models.Expense
+	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		var err error
+		expense, err = s.repo.GetByUUIDForUpdate(ctx, uuid, userID)
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("get expense: %w", err)
+		}
+		if expense == nil {
+			return fmt.Errorf("expense: %w", port.ErrNotFound)
 		}
 
-		if newAsset.ID != oldAssetID {
-			if newAsset.Quantity.LessThan(expense.Amount) {
-				return nil, errors.New("expense amount cannot exceed the selected asset balance")
-			}
-			// Restore old asset: add back old amount
-			oldAsset, err := s.assetRepo.GetByID(ctx, oldAssetID)
+		oldAmount, oldAssetID := expense.Amount, expense.AssetID
+		newAssetID := oldAssetID
+		if req.AssetUUID != nil {
+			asset, err := lookupCashAsset(ctx, s.assetRepo, *req.AssetUUID, userID)
 			if err != nil {
-				return nil, fmt.Errorf("get old asset: %w", err)
+				return err
 			}
-			if oldAsset != nil {
-				oldAsset.Quantity = oldAsset.Quantity.Add(oldAmount)
-				if err := s.assetRepo.Update(ctx, oldAsset); err != nil {
-					return nil, fmt.Errorf("restore old asset balance: %w", err)
-				}
-			}
-
-			// Deduct new amount from new asset
-			newAsset.Quantity = newAsset.Quantity.Sub(expense.Amount)
-			if err := s.assetRepo.Update(ctx, newAsset); err != nil {
-				return nil, fmt.Errorf("update new asset balance: %w", err)
-			}
-			expense.AssetID = newAsset.ID
-		} else {
-			// Same asset, adjust difference
-			diff := expense.Amount.Sub(oldAmount)
-			if !diff.IsZero() {
-				if diff.IsPositive() && newAsset.Quantity.LessThan(diff) {
-					return nil, errors.New("expense amount cannot exceed the selected asset balance")
-				}
-				newAsset.Quantity = newAsset.Quantity.Sub(diff)
-				if err := s.assetRepo.Update(ctx, newAsset); err != nil {
-					return nil, fmt.Errorf("update asset balance: %w", err)
-				}
-			}
+			newAssetID = asset.ID
 		}
-	} else if req.Amount != nil {
-		// Only amount changed, same asset
-		diff := expense.Amount.Sub(oldAmount)
-		if !diff.IsZero() {
-			asset, err := s.assetRepo.GetByID(ctx, oldAssetID)
-			if err != nil {
-				return nil, fmt.Errorf("get asset: %w", err)
-			}
-			if asset != nil {
-				if diff.IsPositive() && asset.Quantity.LessThan(diff) {
-					return nil, errors.New("expense amount cannot exceed the selected asset balance")
-				}
-				asset.Quantity = asset.Quantity.Sub(diff)
-				if err := s.assetRepo.Update(ctx, asset); err != nil {
-					return nil, fmt.Errorf("update asset balance: %w", err)
-				}
-			}
+		if req.Amount != nil {
+			expense.Amount = *req.Amount
 		}
-	}
 
-	if err := s.repo.Update(ctx, expense); err != nil {
-		return nil, fmt.Errorf("update expense: %w", err)
+		if newAssetID != oldAssetID {
+			// Refund the old asset, then charge the new one.
+			if err := adjustCashBalance(ctx, s.assetRepo, oldAssetID, oldAmount, expenseInsufficientMsg); err != nil {
+				return err
+			}
+			if err := adjustCashBalance(ctx, s.assetRepo, newAssetID, expense.Amount.Neg(), expenseInsufficientMsg); err != nil {
+				return err
+			}
+		} else if err := adjustCashBalance(ctx, s.assetRepo, oldAssetID, oldAmount.Sub(expense.Amount), expenseInsufficientMsg); err != nil {
+			return err
+		}
+
+		expense.AssetID = newAssetID
+		if req.Category != nil {
+			expense.Category = *req.Category
+		}
+		if req.Note != nil {
+			expense.Note = req.Note
+		}
+		if req.Date != nil {
+			expense.Date = *req.Date
+		}
+		if err := s.repo.Update(ctx, expense); err != nil {
+			return fmt.Errorf("update expense: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return expense, nil
 }
 
 func (s *ExpenseService) DeleteExpense(ctx context.Context, userID int64, uuid string) error {
-	expense, err := s.GetExpense(ctx, userID, uuid)
+	var expense *models.Expense
+	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		var err error
+		expense, err = s.repo.GetByUUIDForUpdate(ctx, uuid, userID)
+		if err != nil {
+			return fmt.Errorf("get expense: %w", err)
+		}
+		if expense == nil {
+			return fmt.Errorf("expense: %w", port.ErrNotFound)
+		}
+		// Deleting an expense refunds its amount to the CASH asset.
+		if err := adjustCashBalance(ctx, s.assetRepo, expense.AssetID, expense.Amount, expenseInsufficientMsg); err != nil {
+			return err
+		}
+		if err := s.repo.Delete(ctx, uuid, userID); err != nil {
+			return fmt.Errorf("delete expense: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
 		return err
-	}
-
-	// Restore CASH asset balance
-	asset, err := s.assetRepo.GetByID(ctx, expense.AssetID)
-	if err != nil {
-		return fmt.Errorf("get asset: %w", err)
-	}
-	if asset != nil {
-		asset.Quantity = asset.Quantity.Add(expense.Amount)
-		if err := s.assetRepo.Update(ctx, asset); err != nil {
-			return fmt.Errorf("restore asset balance: %w", err)
-		}
-	}
-
-	if err := s.repo.Delete(ctx, uuid, userID); err != nil {
-		return fmt.Errorf("delete expense: %w", err)
 	}
 	slog.Info("expense_deleted", "user_id", userID, "uuid", uuid, "amount", expense.Amount.String())
 	return nil

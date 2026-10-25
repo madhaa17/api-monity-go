@@ -1,7 +1,7 @@
 {
 	"info": {
 		"name": "Monity — Finance Tracker API",
-		"description": "Complete API collection for Monity finance tracker backend.\n\n**Setup:**\n1. Set `base_url` variable (e.g. `http://localhost:8080` or `https://api-assetmonitor.my.id`)\n2. Call Login/Register — token is auto-saved to `token` variable\n3. All authenticated requests use `{{token}}` in Bearer header\n\n**Variable auto-capture:**\n- Login/Register → `token`, `refresh_token`\n- Create Asset → `asset_uuid`, `cash_asset_uuid` (if CASH)\n- Create Expense → `expense_uuid`\n- Create Income → `income_uuid`\n- Create Saving Goal → `saving_goal_uuid`\n\n**Default currency:** IDR (all endpoints default to IDR if no `?currency=` param)",
+		"description": "Complete API collection for Monity finance tracker backend.\n\n**Setup:**\n1. Set `base_url` variable (e.g. `http://localhost:8080` or `https://api-assetmonitor.my.id`)\n2. Call Login/Register — token is auto-saved to `token` variable\n3. All authenticated requests use `{{token}}` in Bearer header\n\n**Variable auto-capture:**\n- Login/Register → `token`, `refresh_token`\n- Create Asset → `asset_uuid`, `cash_asset_uuid` (if CASH)\n- Create Expense → `expense_uuid`\n- Create Income → `income_uuid`\n- Create Saving Goal → `saving_goal_uuid`\n- Create Debt → `debt_uuid`\n- Create Receivable → `receivable_uuid`\n\n**Default currency:** IDR (all endpoints default to IDR if no `?currency=` param)",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
@@ -12,7 +12,9 @@
 		{ "key": "cash_asset_uuid", "value": "", "type": "string" },
 		{ "key": "expense_uuid", "value": "", "type": "string" },
 		{ "key": "income_uuid", "value": "", "type": "string" },
-		{ "key": "saving_goal_uuid", "value": "", "type": "string" }
+		{ "key": "saving_goal_uuid", "value": "", "type": "string" },
+		{ "key": "debt_uuid", "value": "", "type": "string" },
+		{ "key": "receivable_uuid", "value": "", "type": "string" }
 	],
 	"item": [
 		{
@@ -827,6 +829,210 @@
 							"path": ["api", "v1", "saving-goals", ":uuid"],
 							"variable": [
 								{ "key": "uuid", "value": "{{saving_goal_uuid}}", "description": "Saving Goal UUID" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Debts",
+			"description": "CRUD for debts (hutang). Optional fields: dueDate, note, assetUuid (CASH asset reference).",
+			"item": [
+				{
+					"name": "Create Debt",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('debt_uuid', json.data.uuid);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"partyName\": \"Andi\",\n  \"amount\": 500000,\n  \"dueDate\": \"2026-03-31T00:00:00Z\",\n  \"note\": \"Pinjam untuk kebutuhan mendadak\",\n  \"assetUuid\": \"{{cash_asset_uuid}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/debts",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "debts"]
+						}
+					}
+				},
+				{
+					"name": "List Debts",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/debts",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "debts"]
+						}
+					}
+				},
+				{
+					"name": "Get Debt by UUID",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/debts/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "debts", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{debt_uuid}}", "description": "Debt UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Debt",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"note\": \"Revisi catatan hutang\",\n  \"dueDate\": \"2026-04-15T00:00:00Z\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/debts/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "debts", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{debt_uuid}}", "description": "Debt UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Debt",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/debts/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "debts", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{debt_uuid}}", "description": "Debt UUID" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Receivables",
+			"description": "CRUD for receivables (piutang). Optional fields: dueDate, note, assetUuid (CASH asset reference).",
+			"item": [
+				{
+					"name": "Create Receivable",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('receivable_uuid', json.data.uuid);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"partyName\": \"Budi\",\n  \"amount\": 750000,\n  \"dueDate\": \"2026-03-15T00:00:00Z\",\n  \"note\": \"Piutang proyek freelance\",\n  \"assetUuid\": \"{{cash_asset_uuid}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/receivables",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "receivables"]
+						}
+					}
+				},
+				{
+					"name": "List Receivables",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/receivables",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "receivables"]
+						}
+					}
+				},
+				{
+					"name": "Get Receivable by UUID",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/receivables/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "receivables", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{receivable_uuid}}", "description": "Receivable UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Receivable",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"note\": \"Revisi catatan piutang\",\n  \"dueDate\": \"2026-03-20T00:00:00Z\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/receivables/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "receivables", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{receivable_uuid}}", "description": "Receivable UUID" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Receivable",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/receivables/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "receivables", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{receivable_uuid}}", "description": "Receivable UUID" }
 							]
 						}
 					}

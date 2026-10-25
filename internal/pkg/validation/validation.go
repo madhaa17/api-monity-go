@@ -77,3 +77,10 @@ func CheckMaxLen(s string, max int) error {
 func FieldTooLongError(field string, max int) error {
 	return fmt.Errorf("%s must be at most %d characters", field, max)
 }
+
+var uuidRegex = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// ValidUUID reports whether s is a canonical UUID string (as stored in uuid columns).
+func ValidUUID(s string) bool {
+	return uuidRegex.MatchString(s)
+}

@@ -34,33 +34,36 @@ type CashflowSummary struct {
 }
 
 type CategoryTotal struct {
-	Category   string          `json:"category"`
-	Total      decimal.Decimal `json:"total"`
-	Percentage float64         `json:"percentage"`
+	CategoryUUID string          `json:"categoryUuid"`
+	Category     string          `json:"category"` // category name
+	Color        *string         `json:"color,omitempty"`
+	Total        decimal.Decimal `json:"total"`
+	Count        int64           `json:"count"`
+	Percentage   float64         `json:"percentage"`
 }
 
 // MonthlyTrendPoint is one month in the overview trend (for line/area charts).
 type MonthlyTrendPoint struct {
-	Month     string          `json:"month"`     // YYYY-MM
+	Month     string          `json:"month"` // YYYY-MM
 	Income    decimal.Decimal `json:"income"`
 	Expense   decimal.Decimal `json:"expense"`
 	NetSaving decimal.Decimal `json:"netSaving"`
 }
 
 type FinancialOverview struct {
-	TotalAssets            decimal.Decimal      `json:"totalAssets"`
-	TotalSavingGoals       int                  `json:"totalSavingGoals"`
-	TotalTargetAmount      decimal.Decimal      `json:"totalTargetAmount"`
-	TotalCurrentAmount     decimal.Decimal      `json:"totalCurrentAmount"`
-	SavingGoalProgress     float64              `json:"savingGoalProgress"`
+	TotalAssets            decimal.Decimal     `json:"totalAssets"`
+	TotalSavingGoals       int                 `json:"totalSavingGoals"`
+	TotalTargetAmount      decimal.Decimal     `json:"totalTargetAmount"`
+	TotalCurrentAmount     decimal.Decimal     `json:"totalCurrentAmount"`
+	SavingGoalProgress     float64             `json:"savingGoalProgress"`
 	MonthlyIncome          decimal.Decimal     `json:"monthlyIncome"`
 	MonthlyExpense         decimal.Decimal     `json:"monthlyExpense"`
 	MonthlyNetSaving       decimal.Decimal     `json:"monthlyNetSaving"`
 	MonthlyTrend           []MonthlyTrendPoint `json:"monthlyTrend"` // last 12 months, oldest first
 	TotalDebt              decimal.Decimal     `json:"totalDebt"`
 	TotalReceivable        decimal.Decimal     `json:"totalReceivable"`
-	DebtOverdueCount       int                  `json:"debtOverdueCount"`
-	ReceivableOverdueCount int                  `json:"receivableOverdueCount"`
+	DebtOverdueCount       int                 `json:"debtOverdueCount"`
+	ReceivableOverdueCount int                 `json:"receivableOverdueCount"`
 }
 
 type SavingGoalSummary struct {

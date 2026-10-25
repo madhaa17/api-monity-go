@@ -13,7 +13,8 @@ type ExpenseRepository interface {
 	GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Expense, error)
 	// GetByUUIDForUpdate is GetByUUID with a row lock; call it inside Transactor.WithinTransaction.
 	GetByUUIDForUpdate(ctx context.Context, uuid string, userID int64) (*models.Expense, error)
-	ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Expense, int64, error)
+	ListByUserID(ctx context.Context, userID int64, filter TransactionFilter, sort TransactionSort, page, limit int) ([]models.Expense, int64, error)
+	Summarize(ctx context.Context, userID int64, filter TransactionFilter, groupBy SummaryGroupBy) (*TransactionSummary, error)
 	Update(ctx context.Context, expense *models.Expense) error
 	Delete(ctx context.Context, uuid string, userID int64) error
 }
@@ -21,7 +22,10 @@ type ExpenseRepository interface {
 type ExpenseService interface {
 	CreateExpense(ctx context.Context, userID int64, req CreateExpenseRequest) (*models.Expense, error)
 	GetExpense(ctx context.Context, userID int64, uuid string) (*models.Expense, error)
-	ListExpenses(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Expense, ListMeta, error)
+	// ListExpenses returns a page of matching expenses; sort is "date", "-date" (default), "amount" or "-amount".
+	ListExpenses(ctx context.Context, userID int64, filter TransactionFilter, sort string, page, limit int) ([]models.Expense, ListMeta, error)
+	// SummarizeExpenses aggregates the expenses matching filter; groupBy is "day" (default) or "month".
+	SummarizeExpenses(ctx context.Context, userID int64, filter TransactionFilter, groupBy string) (*TransactionSummary, error)
 	UpdateExpense(ctx context.Context, userID int64, uuid string, req UpdateExpenseRequest) (*models.Expense, error)
 	DeleteExpense(ctx context.Context, userID int64, uuid string) error
 }

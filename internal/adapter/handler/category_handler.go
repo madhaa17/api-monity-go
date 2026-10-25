@@ -9,6 +9,7 @@ import (
 	"monity/internal/core/port"
 	"monity/internal/models"
 	"monity/internal/pkg/response"
+	"monity/internal/pkg/validation"
 )
 
 type CategoryHandler struct {
@@ -49,7 +50,7 @@ func (h *CategoryHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uuid := r.PathValue("uuid")
-	if strings.TrimSpace(uuid) == "" {
+	if !validation.ValidUUID(uuid) {
 		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid category uuid", nil)
 		return
 	}
@@ -92,7 +93,7 @@ func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uuid := r.PathValue("uuid")
-	if strings.TrimSpace(uuid) == "" {
+	if !validation.ValidUUID(uuid) {
 		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid category uuid", nil)
 		return
 	}
@@ -120,7 +121,7 @@ func (h *CategoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uuid := r.PathValue("uuid")
-	if strings.TrimSpace(uuid) == "" {
+	if !validation.ValidUUID(uuid) {
 		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid category uuid", nil)
 		return
 	}

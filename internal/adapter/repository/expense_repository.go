@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"monity/internal/core/port"
 	"monity/internal/models"
+	"monity/internal/pkg/validation"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -39,8 +39,11 @@ func (r *ExpenseRepo) GetByUUIDForUpdate(ctx context.Context, uuid string, userI
 }
 
 func (r *ExpenseRepo) getByUUID(db *gorm.DB, uuid string, userID int64) (*models.Expense, error) {
+	if !validation.ValidUUID(uuid) {
+		return nil, nil // a malformed UUID cannot match; avoid a database cast error
+	}
 	var expense models.Expense
-	result := withCategory(db, "expenses").Where("expenses.uuid = ? AND expenses.user_id = ?", uuid, userID).First(&expense)
+	result := expensesTable.withRelations(db).Where("expenses.uuid = ? AND expenses.user_id = ?", uuid, userID).First(&expense)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -50,33 +53,17 @@ func (r *ExpenseRepo) getByUUID(db *gorm.DB, uuid string, userID int64) (*models
 	return &expense, nil
 }
 
-func (r *ExpenseRepo) ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Expense, int64, error) {
-	filter := func(q *gorm.DB) *gorm.DB {
-		q = q.Where("expenses.user_id = ?", userID)
-		if dateFrom != nil {
-			q = q.Where("expenses.date >= ?", dateFrom)
-		}
-		if dateTo != nil {
-			q = q.Where("expenses.date < ?", dateTo.AddDate(0, 0, 1))
-		}
-		return q
-	}
-	var total int64
-	if err := filter(conn(ctx, r.db).Model(&models.Expense{})).Count(&total).Error; err != nil {
-		return nil, 0, fmt.Errorf("count expenses: %w", err)
-	}
-	offset := (page - 1) * limit
-	if offset < 0 {
-		offset = 0
-	}
+func (r *ExpenseRepo) ListByUserID(ctx context.Context, userID int64, filter port.TransactionFilter, sort port.TransactionSort, page, limit int) ([]models.Expense, int64, error) {
 	var expenses []models.Expense
-	result := filter(withCategory(conn(ctx, r.db), "expenses")).
-		Order("expenses.date desc, expenses.created_at desc").
-		Offset(offset).Limit(limit).Find(&expenses)
-	if result.Error != nil {
-		return nil, 0, fmt.Errorf("list expenses: %w", result.Error)
+	total, err := expensesTable.list(ctx, r.db, userID, filter, sort, page, limit, &expenses)
+	if err != nil {
+		return nil, 0, err
 	}
 	return expenses, total, nil
+}
+
+func (r *ExpenseRepo) Summarize(ctx context.Context, userID int64, filter port.TransactionFilter, groupBy port.SummaryGroupBy) (*port.TransactionSummary, error) {
+	return expensesTable.summarize(ctx, r.db, userID, filter, groupBy)
 }
 
 func (r *ExpenseRepo) Update(ctx context.Context, expense *models.Expense) error {

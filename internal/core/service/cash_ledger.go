@@ -82,6 +82,51 @@ func adjustCashBalance(ctx context.Context, assetRepo port.AssetRepository, asse
 	return nil
 }
 
+const (
+	maxSearchLen         = 100
+	maxCategoryFilterLen = 50
+)
+
+// validateTransactionFilter rejects filters that cannot match anything or are unreasonably large.
+func validateTransactionFilter(f port.TransactionFilter) error {
+	if f.DateFrom != nil && f.DateTo != nil && f.DateFrom.After(*f.DateTo) {
+		return port.NewValidationError("date_from must not be after date_to")
+	}
+	if f.MinAmount != nil && f.MaxAmount != nil && f.MinAmount.GreaterThan(*f.MaxAmount) {
+		return port.NewValidationError("min_amount must not be greater than max_amount")
+	}
+	if len(f.CategoryUUIDs) > maxCategoryFilterLen {
+		return port.NewValidationError(fmt.Sprintf("at most %d categories can be filtered at once", maxCategoryFilterLen))
+	}
+	if len([]rune(f.Search)) > maxSearchLen {
+		return port.NewValidationError(fmt.Sprintf("search must be at most %d characters", maxSearchLen))
+	}
+	return nil
+}
+
+// parseTransactionSort parses "date", "-date", "amount" or "-amount"; empty means newest first.
+func parseTransactionSort(sort string) (port.TransactionSort, error) {
+	sort = strings.TrimSpace(sort)
+	if sort == "" {
+		return port.DefaultTransactionSort, nil
+	}
+	order := port.TransactionSort{Field: strings.TrimPrefix(sort, "-"), Desc: strings.HasPrefix(sort, "-")}
+	if order.Field != "date" && order.Field != "amount" {
+		return port.TransactionSort{}, port.NewValidationError("sort must be one of date, -date, amount, -amount")
+	}
+	return order, nil
+}
+
+func parseSummaryGroupBy(groupBy string) (port.SummaryGroupBy, error) {
+	switch port.SummaryGroupBy(strings.ToLower(strings.TrimSpace(groupBy))) {
+	case "", port.SummaryGroupByDay:
+		return port.SummaryGroupByDay, nil
+	case port.SummaryGroupByMonth:
+		return port.SummaryGroupByMonth, nil
+	}
+	return "", port.NewValidationError("group_by must be day or month")
+}
+
 func deref(s *string) string {
 	if s == nil {
 		return ""

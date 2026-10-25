@@ -13,7 +13,8 @@ type IncomeRepository interface {
 	GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Income, error)
 	// GetByUUIDForUpdate is GetByUUID with a row lock; call it inside Transactor.WithinTransaction.
 	GetByUUIDForUpdate(ctx context.Context, uuid string, userID int64) (*models.Income, error)
-	ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Income, int64, error)
+	ListByUserID(ctx context.Context, userID int64, filter TransactionFilter, sort TransactionSort, page, limit int) ([]models.Income, int64, error)
+	Summarize(ctx context.Context, userID int64, filter TransactionFilter, groupBy SummaryGroupBy) (*TransactionSummary, error)
 	Update(ctx context.Context, income *models.Income) error
 	Delete(ctx context.Context, uuid string, userID int64) error
 }
@@ -21,7 +22,10 @@ type IncomeRepository interface {
 type IncomeService interface {
 	CreateIncome(ctx context.Context, userID int64, req CreateIncomeRequest) (*models.Income, error)
 	GetIncome(ctx context.Context, userID int64, uuid string) (*models.Income, error)
-	ListIncomes(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Income, ListMeta, error)
+	// ListIncomes returns a page of matching incomes; sort is "date", "-date" (default), "amount" or "-amount".
+	ListIncomes(ctx context.Context, userID int64, filter TransactionFilter, sort string, page, limit int) ([]models.Income, ListMeta, error)
+	// SummarizeIncomes aggregates the incomes matching filter; groupBy is "day" (default) or "month".
+	SummarizeIncomes(ctx context.Context, userID int64, filter TransactionFilter, groupBy string) (*TransactionSummary, error)
 	UpdateIncome(ctx context.Context, userID int64, uuid string, req UpdateIncomeRequest) (*models.Income, error)
 	DeleteIncome(ctx context.Context, userID int64, uuid string) error
 }

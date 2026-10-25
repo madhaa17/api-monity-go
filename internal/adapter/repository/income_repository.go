@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"monity/internal/core/port"
 	"monity/internal/models"
+	"monity/internal/pkg/validation"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -39,8 +39,11 @@ func (r *IncomeRepo) GetByUUIDForUpdate(ctx context.Context, uuid string, userID
 }
 
 func (r *IncomeRepo) getByUUID(db *gorm.DB, uuid string, userID int64) (*models.Income, error) {
+	if !validation.ValidUUID(uuid) {
+		return nil, nil // a malformed UUID cannot match; avoid a database cast error
+	}
 	var income models.Income
-	result := withCategory(db, "incomes").Where("incomes.uuid = ? AND incomes.user_id = ?", uuid, userID).First(&income)
+	result := incomesTable.withRelations(db).Where("incomes.uuid = ? AND incomes.user_id = ?", uuid, userID).First(&income)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -50,33 +53,17 @@ func (r *IncomeRepo) getByUUID(db *gorm.DB, uuid string, userID int64) (*models.
 	return &income, nil
 }
 
-func (r *IncomeRepo) ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Income, int64, error) {
-	filter := func(q *gorm.DB) *gorm.DB {
-		q = q.Where("incomes.user_id = ?", userID)
-		if dateFrom != nil {
-			q = q.Where("incomes.date >= ?", dateFrom)
-		}
-		if dateTo != nil {
-			q = q.Where("incomes.date < ?", dateTo.AddDate(0, 0, 1))
-		}
-		return q
-	}
-	var total int64
-	if err := filter(conn(ctx, r.db).Model(&models.Income{})).Count(&total).Error; err != nil {
-		return nil, 0, fmt.Errorf("count incomes: %w", err)
-	}
-	offset := (page - 1) * limit
-	if offset < 0 {
-		offset = 0
-	}
+func (r *IncomeRepo) ListByUserID(ctx context.Context, userID int64, filter port.TransactionFilter, sort port.TransactionSort, page, limit int) ([]models.Income, int64, error) {
 	var incomes []models.Income
-	result := filter(withCategory(conn(ctx, r.db), "incomes")).
-		Order("incomes.date desc, incomes.created_at desc").
-		Offset(offset).Limit(limit).Find(&incomes)
-	if result.Error != nil {
-		return nil, 0, fmt.Errorf("list incomes: %w", result.Error)
+	total, err := incomesTable.list(ctx, r.db, userID, filter, sort, page, limit, &incomes)
+	if err != nil {
+		return nil, 0, err
 	}
 	return incomes, total, nil
+}
+
+func (r *IncomeRepo) Summarize(ctx context.Context, userID int64, filter port.TransactionFilter, groupBy port.SummaryGroupBy) (*port.TransactionSummary, error) {
+	return incomesTable.summarize(ctx, r.db, userID, filter, groupBy)
 }
 
 func (r *IncomeRepo) Update(ctx context.Context, income *models.Income) error {

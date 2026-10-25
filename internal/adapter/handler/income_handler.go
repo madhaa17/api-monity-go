@@ -3,11 +3,11 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"monity/internal/adapter/middleware"
 	"monity/internal/core/port"
 	"monity/internal/pkg/response"
+	"monity/internal/pkg/validation"
 )
 
 type IncomeHandler struct {
@@ -47,13 +47,37 @@ func (h *IncomeHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, limit := parsePageLimit(r, 1, 20, 100)
-	dateFrom, dateTo := parseDateFilter(r)
-	incomes, meta, err := h.svc.ListIncomes(r.Context(), userID, dateFrom, dateTo, page, limit)
+	filter, err := parseTransactionFilter(r)
 	if err != nil {
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to list incomes", err.Error())
+		response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+	incomes, meta, err := h.svc.ListIncomes(r.Context(), userID, filter, r.URL.Query().Get("sort"), page, limit)
+	if err != nil {
+		writeServiceError(w, r, err, "income not found", "failed to list incomes")
 		return
 	}
 	response.Success(w, http.StatusOK, "incomes retrieved", port.ListResponse{Items: incomes, Meta: meta})
+}
+
+// Summary handles GET /incomes/summary: totals for the same filters as List, plus ?group_by=day|month.
+func (h *IncomeHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
+	if !ok {
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+	filter, err := parseTransactionFilter(r)
+	if err != nil {
+		response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+	summary, err := h.svc.SummarizeIncomes(r.Context(), userID, filter, r.URL.Query().Get("group_by"))
+	if err != nil {
+		writeServiceError(w, r, err, "income not found", "failed to summarize incomes")
+		return
+	}
+	response.Success(w, http.StatusOK, "income summary retrieved", summary)
 }
 
 func (h *IncomeHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +88,7 @@ func (h *IncomeHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uuid := r.PathValue("uuid")
-	if strings.TrimSpace(uuid) == "" {
+	if !validation.ValidUUID(uuid) {
 		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid income uuid", nil)
 		return
 	}
@@ -86,7 +110,7 @@ func (h *IncomeHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uuid := r.PathValue("uuid")
-	if strings.TrimSpace(uuid) == "" {
+	if !validation.ValidUUID(uuid) {
 		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid income uuid", nil)
 		return
 	}
@@ -114,7 +138,7 @@ func (h *IncomeHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uuid := r.PathValue("uuid")
-	if strings.TrimSpace(uuid) == "" {
+	if !validation.ValidUUID(uuid) {
 		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid income uuid", nil)
 		return
 	}

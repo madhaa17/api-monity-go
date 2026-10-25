@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"time"
 
 	"monity/internal/core/port"
 	"monity/internal/models"
@@ -67,6 +66,8 @@ func (s *IncomeService) CreateIncome(ctx context.Context, userID int64, req port
 			CategoryID:   category.ID,
 			CategoryUUID: category.UUID,
 			CategoryName: category.Name,
+			AssetUUID:    asset.UUID,
+			AssetName:    asset.Name,
 			Note:         req.Note,
 			Date:         req.Date,
 		}
@@ -93,9 +94,16 @@ func (s *IncomeService) GetIncome(ctx context.Context, userID int64, uuid string
 	return income, nil
 }
 
-func (s *IncomeService) ListIncomes(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Income, port.ListMeta, error) {
+func (s *IncomeService) ListIncomes(ctx context.Context, userID int64, filter port.TransactionFilter, sort string, page, limit int) ([]models.Income, port.ListMeta, error) {
+	if err := validateTransactionFilter(filter); err != nil {
+		return nil, port.ListMeta{}, err
+	}
+	order, err := parseTransactionSort(sort)
+	if err != nil {
+		return nil, port.ListMeta{}, err
+	}
 	page, limit = normalizePageLimit(page, limit)
-	incomes, total, err := s.repo.ListByUserID(ctx, userID, dateFrom, dateTo, page, limit)
+	incomes, total, err := s.repo.ListByUserID(ctx, userID, filter, order, page, limit)
 	if err != nil {
 		return nil, port.ListMeta{}, fmt.Errorf("list incomes: %w", err)
 	}
@@ -103,6 +111,21 @@ func (s *IncomeService) ListIncomes(ctx context.Context, userID int64, dateFrom,
 		incomes = []models.Income{}
 	}
 	return incomes, listMeta(total, page, limit), nil
+}
+
+func (s *IncomeService) SummarizeIncomes(ctx context.Context, userID int64, filter port.TransactionFilter, groupBy string) (*port.TransactionSummary, error) {
+	if err := validateTransactionFilter(filter); err != nil {
+		return nil, err
+	}
+	group, err := parseSummaryGroupBy(groupBy)
+	if err != nil {
+		return nil, err
+	}
+	summary, err := s.repo.Summarize(ctx, userID, filter, group)
+	if err != nil {
+		return nil, fmt.Errorf("summarize incomes: %w", err)
+	}
+	return summary, nil
 }
 
 func (s *IncomeService) UpdateIncome(ctx context.Context, userID int64, uuid string, req port.UpdateIncomeRequest) (*models.Income, error) {
@@ -153,6 +176,7 @@ func (s *IncomeService) UpdateIncome(ctx context.Context, userID int64, uuid str
 				return err
 			}
 			newAssetID = asset.ID
+			income.AssetUUID, income.AssetName = asset.UUID, asset.Name
 		}
 		if req.Amount != nil {
 			income.Amount = *req.Amount

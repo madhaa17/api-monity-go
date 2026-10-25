@@ -24,6 +24,7 @@ type Income struct {
 	Date      time.Time `json:"date"`
 	CreatedAt time.Time `json:"createdAt"`
 
-	// Belongs-to: the CASH asset this income goes into
-	Asset *Asset `gorm:"foreignKey:AssetID" json:"asset,omitempty"`
+	// The CASH asset this income goes into; read-only, filled by the repository's join.
+	AssetUUID string `gorm:"->;column:asset_uuid" json:"assetUuid"`
+	AssetName string `gorm:"->;column:asset_name" json:"assetName"`
 }

@@ -8,6 +8,7 @@ import (
 
 	"monity/internal/core/port"
 	"monity/internal/models"
+	"monity/internal/pkg/validation"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
@@ -46,6 +47,9 @@ func (r *CategoryRepo) CreateDefaults(ctx context.Context, userID int64) error {
 }
 
 func (r *CategoryRepo) GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Category, error) {
+	if !validation.ValidUUID(uuid) {
+		return nil, nil // a malformed UUID cannot match; avoid a database cast error
+	}
 	return r.first(conn(ctx, r.db).Where("uuid = ? AND user_id = ?", uuid, userID))
 }
 
@@ -115,14 +119,6 @@ func (r *CategoryRepo) Reassign(ctx context.Context, fromID, toID int64) error {
 		return fmt.Errorf("reassign incomes: %w", err)
 	}
 	return nil
-}
-
-// withCategory selects rows of an incomes/expenses table joined with their category, filling the
-// read-only CategoryUUID and CategoryName fields. Qualify column names with the table in conditions.
-func withCategory(db *gorm.DB, table string) *gorm.DB {
-	return db.Table(table).
-		Select(table + ".*, categories.uuid AS category_uuid, categories.name AS category_name").
-		Joins("JOIN categories ON categories.id = " + table + ".category_id")
 }
 
 // translateUniqueViolation maps a Postgres unique violation to port.ErrConflict.

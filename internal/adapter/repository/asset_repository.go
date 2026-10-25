@@ -7,6 +7,7 @@ import (
 
 	"monity/internal/core/port"
 	"monity/internal/models"
+	"monity/internal/pkg/validation"
 
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
@@ -41,6 +42,9 @@ func (r *AssetRepo) GetByID(ctx context.Context, id int64) (*models.Asset, error
 }
 
 func (r *AssetRepo) GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Asset, error) {
+	if !validation.ValidUUID(uuid) {
+		return nil, nil // a malformed UUID cannot match; avoid a database cast error
+	}
 	var asset models.Asset
 	result := conn(ctx, r.db).Where("uuid = ? AND user_id = ?", uuid, userID).First(&asset)
 	if result.Error != nil {

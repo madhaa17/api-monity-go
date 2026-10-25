@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"monity/internal/core/port"
 	"monity/internal/models"
@@ -55,6 +54,8 @@ func (s *ExpenseService) CreateExpense(ctx context.Context, userID int64, req po
 			CategoryID:   category.ID,
 			CategoryUUID: category.UUID,
 			CategoryName: category.Name,
+			AssetUUID:    asset.UUID,
+			AssetName:    asset.Name,
 			Note:         req.Note,
 			Date:         req.Date,
 		}
@@ -81,9 +82,16 @@ func (s *ExpenseService) GetExpense(ctx context.Context, userID int64, uuid stri
 	return expense, nil
 }
 
-func (s *ExpenseService) ListExpenses(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Expense, port.ListMeta, error) {
+func (s *ExpenseService) ListExpenses(ctx context.Context, userID int64, filter port.TransactionFilter, sort string, page, limit int) ([]models.Expense, port.ListMeta, error) {
+	if err := validateTransactionFilter(filter); err != nil {
+		return nil, port.ListMeta{}, err
+	}
+	order, err := parseTransactionSort(sort)
+	if err != nil {
+		return nil, port.ListMeta{}, err
+	}
 	page, limit = normalizePageLimit(page, limit)
-	expenses, total, err := s.repo.ListByUserID(ctx, userID, dateFrom, dateTo, page, limit)
+	expenses, total, err := s.repo.ListByUserID(ctx, userID, filter, order, page, limit)
 	if err != nil {
 		return nil, port.ListMeta{}, fmt.Errorf("list expenses: %w", err)
 	}
@@ -91,6 +99,21 @@ func (s *ExpenseService) ListExpenses(ctx context.Context, userID int64, dateFro
 		expenses = []models.Expense{}
 	}
 	return expenses, listMeta(total, page, limit), nil
+}
+
+func (s *ExpenseService) SummarizeExpenses(ctx context.Context, userID int64, filter port.TransactionFilter, groupBy string) (*port.TransactionSummary, error) {
+	if err := validateTransactionFilter(filter); err != nil {
+		return nil, err
+	}
+	group, err := parseSummaryGroupBy(groupBy)
+	if err != nil {
+		return nil, err
+	}
+	summary, err := s.repo.Summarize(ctx, userID, filter, group)
+	if err != nil {
+		return nil, fmt.Errorf("summarize expenses: %w", err)
+	}
+	return summary, nil
 }
 
 func (s *ExpenseService) UpdateExpense(ctx context.Context, userID int64, uuid string, req port.UpdateExpenseRequest) (*models.Expense, error) {
@@ -136,6 +159,7 @@ func (s *ExpenseService) UpdateExpense(ctx context.Context, userID int64, uuid s
 				return err
 			}
 			newAssetID = asset.ID
+			expense.AssetUUID, expense.AssetName = asset.UUID, asset.Name
 		}
 		if req.Amount != nil {
 			expense.Amount = *req.Amount

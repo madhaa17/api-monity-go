@@ -59,44 +59,24 @@ func (r *InsightRepo) GetTotalExpenseByDateRange(ctx context.Context, userID int
 }
 
 func (r *InsightRepo) GetExpensesByCategory(ctx context.Context, userID int64, startDate, endDate time.Time) ([]port.CategoryTotal, error) {
-	var results []struct {
-		Category string          `gorm:"column:category"`
-		Total    decimal.Decimal `gorm:"column:total"`
-	}
-
+	var categories []port.CategoryTotal
 	err := r.db.WithContext(ctx).
 		Model(&models.Expense{}).
-		Select("categories.name AS category, SUM(expenses.amount) as total").
+		Select("categories.uuid AS category_uuid, categories.name AS category, categories.color AS color, SUM(expenses.amount) AS total, COUNT(*) AS count").
 		Joins("JOIN categories ON categories.id = expenses.category_id").
 		Where("expenses.user_id = ? AND expenses.date >= ? AND expenses.date < ?", userID, startDate, endDate).
-		Group("categories.id, categories.name").
+		Group("categories.id").
 		Order("total desc").
-		Scan(&results).Error
-
+		Scan(&categories).Error
 	if err != nil {
 		return nil, fmt.Errorf("get expenses by category: %w", err)
 	}
 
-	// Calculate total for percentages
 	var grandTotal decimal.Decimal
-	for _, r := range results {
-		grandTotal = grandTotal.Add(r.Total)
+	for _, c := range categories {
+		grandTotal = grandTotal.Add(c.Total)
 	}
-
-	categories := make([]port.CategoryTotal, len(results))
-	for i, r := range results {
-		var percentage float64
-		if !grandTotal.IsZero() {
-			pct := r.Total.Div(grandTotal).Mul(decimal.NewFromInt(100))
-			percentage, _ = pct.Float64()
-		}
-		categories[i] = port.CategoryTotal{
-			Category:   r.Category,
-			Total:      r.Total,
-			Percentage: percentage,
-		}
-	}
-
+	setPercentages(categories, grandTotal)
 	return categories, nil
 }
 

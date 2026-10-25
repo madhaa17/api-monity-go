@@ -157,8 +157,11 @@ func (r fakeExpenseRepo) GetByUUID(ctx context.Context, uuid string, userID int6
 func (r fakeExpenseRepo) GetByUUIDForUpdate(ctx context.Context, uuid string, userID int64) (*models.Expense, error) {
 	return r.GetByUUID(ctx, uuid, userID)
 }
-func (r fakeExpenseRepo) ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Expense, int64, error) {
+func (r fakeExpenseRepo) ListByUserID(ctx context.Context, userID int64, filter port.TransactionFilter, sort port.TransactionSort, page, limit int) ([]models.Expense, int64, error) {
 	return nil, 0, nil
+}
+func (r fakeExpenseRepo) Summarize(ctx context.Context, userID int64, filter port.TransactionFilter, groupBy port.SummaryGroupBy) (*port.TransactionSummary, error) {
+	return &port.TransactionSummary{GroupBy: groupBy}, nil
 }
 func (r fakeExpenseRepo) Update(ctx context.Context, e *models.Expense) error {
 	c := *e
@@ -192,8 +195,11 @@ func (r fakeIncomeRepo) GetByUUID(ctx context.Context, uuid string, userID int64
 func (r fakeIncomeRepo) GetByUUIDForUpdate(ctx context.Context, uuid string, userID int64) (*models.Income, error) {
 	return r.GetByUUID(ctx, uuid, userID)
 }
-func (r fakeIncomeRepo) ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Income, int64, error) {
+func (r fakeIncomeRepo) ListByUserID(ctx context.Context, userID int64, filter port.TransactionFilter, sort port.TransactionSort, page, limit int) ([]models.Income, int64, error) {
 	return nil, 0, nil
+}
+func (r fakeIncomeRepo) Summarize(ctx context.Context, userID int64, filter port.TransactionFilter, groupBy port.SummaryGroupBy) (*port.TransactionSummary, error) {
+	return &port.TransactionSummary{GroupBy: groupBy}, nil
 }
 func (r fakeIncomeRepo) Update(ctx context.Context, i *models.Income) error {
 	c := *i
@@ -350,8 +356,12 @@ func TestExpenseService(t *testing.T) {
 
 	t.Run("create deducts balance", func(t *testing.T) {
 		f, svc, wallet, _ := setup()
-		if _, err := create(svc, wallet, "30.50"); err != nil {
+		e, err := create(svc, wallet, "30.50")
+		if err != nil {
 			t.Fatal(err)
+		}
+		if e.AssetUUID != wallet.UUID {
+			t.Fatalf("response assetUuid = %q, want %q", e.AssetUUID, wallet.UUID)
 		}
 		if got := f.balance(wallet.ID); got != "69.50" {
 			t.Fatalf("balance = %s, want 69.50", got)
@@ -408,6 +418,9 @@ func TestExpenseService(t *testing.T) {
 		}
 		if got := f.balance(bank.ID); got != "10.00" {
 			t.Fatalf("bank = %s, want 10.00", got)
+		}
+		if got := f.expenses[e.UUID]; got.AssetID != bank.ID {
+			t.Fatalf("expense asset = %d, want bank %d", got.AssetID, bank.ID)
 		}
 	})
 

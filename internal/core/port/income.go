@@ -30,14 +30,17 @@ type CreateIncomeRequest struct {
 	AssetUUID string          `json:"assetUuid"`
 	Amount    decimal.Decimal `json:"amount"`
 	Source    string          `json:"source"`
-	Note      *string         `json:"note,omitempty"`
-	Date      time.Time       `json:"date"`
+	// CategoryUUID selects a user INCOME category; when empty the user's "Other" category is used.
+	CategoryUUID string    `json:"categoryUuid"`
+	Note         *string   `json:"note,omitempty"`
+	Date         time.Time `json:"date"`
 }
 
 type UpdateIncomeRequest struct {
-	AssetUUID *string          `json:"assetUuid,omitempty"`
-	Amount    *decimal.Decimal `json:"amount,omitempty"`
-	Source    *string          `json:"source,omitempty"`
-	Note      *string          `json:"note,omitempty"`
-	Date      *time.Time       `json:"date,omitempty"`
+	AssetUUID    *string          `json:"assetUuid,omitempty"`
+	Amount       *decimal.Decimal `json:"amount,omitempty"`
+	Source       *string          `json:"source,omitempty"`
+	CategoryUUID *string          `json:"categoryUuid,omitempty"`
+	Note         *string          `json:"note,omitempty"`
+	Date         *time.Time       `json:"date,omitempty"`
 }

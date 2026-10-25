@@ -8,6 +8,9 @@ var ErrNotFound = errors.New("not found")
 // ErrInsufficientBalance is returned by repositories when a balance change would make it negative.
 var ErrInsufficientBalance = errors.New("insufficient balance")
 
+// ErrConflict is returned by repositories when a write violates a uniqueness constraint.
+var ErrConflict = errors.New("conflict")
+
 // ValidationError is a client-facing error: its Message is safe to return to the caller as-is.
 type ValidationError struct {
 	Message string

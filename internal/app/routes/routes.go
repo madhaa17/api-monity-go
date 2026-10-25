@@ -15,6 +15,7 @@ type Handlers struct {
 	Activity          *handler.ActivityHandler
 	Expense           *handler.ExpenseHandler
 	Income            *handler.IncomeHandler
+	Category          *handler.CategoryHandler
 	SavingGoal        *handler.SavingGoalHandler
 	Debt              *handler.DebtHandler
 	Receivable        *handler.ReceivableHandler
@@ -45,6 +46,7 @@ func (r *Router) Setup() *http.ServeMux {
 	r.registerActivityRoutes()
 	r.registerExpenseRoutes()
 	r.registerIncomeRoutes()
+	r.registerCategoryRoutes()
 	r.registerSavingGoalRoutes()
 	r.registerDebtRoutes()
 	r.registerReceivableRoutes()

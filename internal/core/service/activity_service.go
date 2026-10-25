@@ -83,6 +83,7 @@ func (s *ActivityService) ListActivities(ctx context.Context, userID int64, grou
 			CreatedAt: incomes[i].CreatedAt,
 			Note:      incomes[i].Note,
 			Source:    incomes[i].Source,
+			Category:  incomes[i].CategoryName,
 		}
 		groupsMap[key] = append(groupsMap[key], item)
 	}
@@ -95,7 +96,7 @@ func (s *ActivityService) ListActivities(ctx context.Context, userID int64, grou
 			Date:      expenses[i].Date,
 			CreatedAt: expenses[i].CreatedAt,
 			Note:      expenses[i].Note,
-			Category:  string(expenses[i].Category),
+			Category:  expenses[i].CategoryName,
 		}
 		groupsMap[key] = append(groupsMap[key], item)
 	}

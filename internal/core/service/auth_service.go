@@ -21,16 +21,20 @@ import (
 const revokedKeyPrefix = "revoked:"
 
 type AuthService struct {
-	repo  port.UserRepository
-	cfg   *config.Config
-	cache cache.Cache
+	repo         port.UserRepository
+	categoryRepo port.CategoryRepository
+	tx           port.Transactor
+	cfg          *config.Config
+	cache        cache.Cache
 }
 
-func NewAuthService(repo port.UserRepository, cfg *config.Config, c cache.Cache) port.AuthService {
+func NewAuthService(repo port.UserRepository, categoryRepo port.CategoryRepository, tx port.Transactor, cfg *config.Config, c cache.Cache) port.AuthService {
 	return &AuthService{
-		repo:  repo,
-		cfg:   cfg,
-		cache: c,
+		repo:         repo,
+		categoryRepo: categoryRepo,
+		tx:           tx,
+		cfg:          cfg,
+		cache:        c,
 	}
 }
 
@@ -77,8 +81,18 @@ func (s *AuthService) Register(ctx context.Context, req port.RegistryRequest) (*
 		Role:     models.UserRoleUser,
 	}
 
-	if err := s.repo.Create(ctx, newUser); err != nil {
-		return nil, fmt.Errorf("create user: %w", err)
+	// The user and their default income/expense categories are created together.
+	err = s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		if err := s.repo.Create(ctx, newUser); err != nil {
+			return fmt.Errorf("create user: %w", err)
+		}
+		if err := s.categoryRepo.CreateDefaults(ctx, newUser.ID); err != nil {
+			return fmt.Errorf("create default categories: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	token, err := s.generateToken(newUser)

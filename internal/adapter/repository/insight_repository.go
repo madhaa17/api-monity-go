@@ -66,9 +66,10 @@ func (r *InsightRepo) GetExpensesByCategory(ctx context.Context, userID int64, s
 
 	err := r.db.WithContext(ctx).
 		Model(&models.Expense{}).
-		Select("category, SUM(amount) as total").
-		Where("user_id = ? AND date >= ? AND date < ?", userID, startDate, endDate).
-		Group("category").
+		Select("categories.name AS category, SUM(expenses.amount) as total").
+		Joins("JOIN categories ON categories.id = expenses.category_id").
+		Where("expenses.user_id = ? AND expenses.date >= ? AND expenses.date < ?", userID, startDate, endDate).
+		Group("categories.id, categories.name").
 		Order("total desc").
 		Scan(&results).Error
 

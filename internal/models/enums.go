@@ -26,24 +26,11 @@ const (
 	AssetStatusPlanned AssetStatus = "PLANNED"
 )
 
-type ExpenseCategory string
-
-const (
-	ExpenseCategoryFood          ExpenseCategory = "FOOD"
-	ExpenseCategoryTransport     ExpenseCategory = "TRANSPORT"
-	ExpenseCategoryHousing       ExpenseCategory = "HOUSING"
-	ExpenseCategoryUtilities     ExpenseCategory = "UTILITIES"
-	ExpenseCategoryHealth        ExpenseCategory = "HEALTH"
-	ExpenseCategoryEntertainment ExpenseCategory = "ENTERTAINMENT"
-	ExpenseCategoryShopping      ExpenseCategory = "SHOPPING"
-	ExpenseCategoryOther         ExpenseCategory = "OTHER"
-)
-
 type ObligationStatus string
 
 const (
-	ObligationStatusPending  ObligationStatus = "PENDING"
-	ObligationStatusPartial  ObligationStatus = "PARTIAL"
-	ObligationStatusPaid     ObligationStatus = "PAID"
-	ObligationStatusOverdue  ObligationStatus = "OVERDUE"
+	ObligationStatusPending ObligationStatus = "PENDING"
+	ObligationStatusPartial ObligationStatus = "PARTIAL"
+	ObligationStatusPaid    ObligationStatus = "PAID"
+	ObligationStatusOverdue ObligationStatus = "OVERDUE"
 )

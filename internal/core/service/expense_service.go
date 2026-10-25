@@ -13,21 +13,19 @@ import (
 const expenseInsufficientMsg = "expense amount cannot exceed the selected asset balance"
 
 type ExpenseService struct {
-	repo      port.ExpenseRepository
-	assetRepo port.AssetRepository
-	tx        port.Transactor
+	repo         port.ExpenseRepository
+	assetRepo    port.AssetRepository
+	categoryRepo port.CategoryRepository
+	tx           port.Transactor
 }
 
-func NewExpenseService(repo port.ExpenseRepository, assetRepo port.AssetRepository, tx port.Transactor) port.ExpenseService {
-	return &ExpenseService{repo: repo, assetRepo: assetRepo, tx: tx}
+func NewExpenseService(repo port.ExpenseRepository, assetRepo port.AssetRepository, categoryRepo port.CategoryRepository, tx port.Transactor) port.ExpenseService {
+	return &ExpenseService{repo: repo, assetRepo: assetRepo, categoryRepo: categoryRepo, tx: tx}
 }
 
 func (s *ExpenseService) CreateExpense(ctx context.Context, userID int64, req port.CreateExpenseRequest) (*models.Expense, error) {
 	if err := validateCashAmount(req.Amount); err != nil {
 		return nil, err
-	}
-	if !isValidExpenseCategory(req.Category) {
-		return nil, port.NewValidationError("invalid expense category")
 	}
 	if err := validateTransactionDate(req.Date); err != nil {
 		return nil, err
@@ -36,8 +34,13 @@ func (s *ExpenseService) CreateExpense(ctx context.Context, userID int64, req po
 		return nil, err
 	}
 
+	category, err := resolveCategory(ctx, s.categoryRepo, userID, models.CategoryTypeExpense, req.CategoryUUID, req.Category)
+	if err != nil {
+		return nil, err
+	}
+
 	var expense *models.Expense
-	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+	err = s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
 		asset, err := lookupCashAsset(ctx, s.assetRepo, req.AssetUUID, userID)
 		if err != nil {
 			return err
@@ -46,12 +49,14 @@ func (s *ExpenseService) CreateExpense(ctx context.Context, userID int64, req po
 			return err
 		}
 		expense = &models.Expense{
-			UserID:   userID,
-			AssetID:  asset.ID,
-			Amount:   req.Amount,
-			Category: req.Category,
-			Note:     req.Note,
-			Date:     req.Date,
+			UserID:       userID,
+			AssetID:      asset.ID,
+			Amount:       req.Amount,
+			CategoryID:   category.ID,
+			CategoryUUID: category.UUID,
+			CategoryName: category.Name,
+			Note:         req.Note,
+			Date:         req.Date,
 		}
 		if err := s.repo.Create(ctx, expense); err != nil {
 			return fmt.Errorf("create expense: %w", err)
@@ -61,7 +66,7 @@ func (s *ExpenseService) CreateExpense(ctx context.Context, userID int64, req po
 	if err != nil {
 		return nil, err
 	}
-	slog.Info("expense_created", "user_id", userID, "amount", req.Amount.String(), "category", req.Category, "asset_uuid", req.AssetUUID)
+	slog.Info("expense_created", "user_id", userID, "amount", req.Amount.String(), "category", category.Name, "asset_uuid", req.AssetUUID)
 	return expense, nil
 }
 
@@ -94,9 +99,6 @@ func (s *ExpenseService) UpdateExpense(ctx context.Context, userID int64, uuid s
 			return nil, err
 		}
 	}
-	if req.Category != nil && !isValidExpenseCategory(*req.Category) {
-		return nil, port.NewValidationError("invalid expense category")
-	}
 	if req.Date != nil {
 		if err := validateTransactionDate(*req.Date); err != nil {
 			return nil, err
@@ -104,6 +106,15 @@ func (s *ExpenseService) UpdateExpense(ctx context.Context, userID int64, uuid s
 	}
 	if err := validateNote(req.Note); err != nil {
 		return nil, err
+	}
+
+	var category *models.Category
+	if req.CategoryUUID != nil || req.Category != nil {
+		var err error
+		category, err = resolveCategory(ctx, s.categoryRepo, userID, models.CategoryTypeExpense, deref(req.CategoryUUID), deref(req.Category))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var expense *models.Expense
@@ -143,8 +154,8 @@ func (s *ExpenseService) UpdateExpense(ctx context.Context, userID int64, uuid s
 		}
 
 		expense.AssetID = newAssetID
-		if req.Category != nil {
-			expense.Category = *req.Category
+		if category != nil {
+			expense.CategoryID, expense.CategoryUUID, expense.CategoryName = category.ID, category.UUID, category.Name
 		}
 		if req.Note != nil {
 			expense.Note = req.Note
@@ -188,23 +199,4 @@ func (s *ExpenseService) DeleteExpense(ctx context.Context, userID int64, uuid s
 	}
 	slog.Info("expense_deleted", "user_id", userID, "uuid", uuid, "amount", expense.Amount.String())
 	return nil
-}
-
-func isValidExpenseCategory(category models.ExpenseCategory) bool {
-	validCategories := []models.ExpenseCategory{
-		models.ExpenseCategoryFood,
-		models.ExpenseCategoryTransport,
-		models.ExpenseCategoryHousing,
-		models.ExpenseCategoryUtilities,
-		models.ExpenseCategoryHealth,
-		models.ExpenseCategoryEntertainment,
-		models.ExpenseCategoryShopping,
-		models.ExpenseCategoryOther,
-	}
-	for _, valid := range validCategories {
-		if category == valid {
-			return true
-		}
-	}
-	return false
 }

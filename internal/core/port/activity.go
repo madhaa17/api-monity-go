@@ -20,7 +20,7 @@ type ActivityItem struct {
 	CreatedAt time.Time       `json:"createdAt"`
 	Note      *string         `json:"note,omitempty"`
 	Source    string          `json:"source,omitempty"`    // income only
-	Category  string          `json:"category,omitempty"`  // expense only
+	Category  string          `json:"category,omitempty"`  // category name (income and expense)
 	PartyName string          `json:"partyName,omitempty"` // debt / receivable only
 }
 

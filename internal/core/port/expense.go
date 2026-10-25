@@ -27,17 +27,21 @@ type ExpenseService interface {
 }
 
 type CreateExpenseRequest struct {
-	AssetUUID string                 `json:"assetUuid"`
-	Amount    decimal.Decimal        `json:"amount"`
-	Category  models.ExpenseCategory `json:"category"`
-	Note      *string                `json:"note,omitempty"`
-	Date      time.Time              `json:"date"`
+	AssetUUID string          `json:"assetUuid"`
+	Amount    decimal.Decimal `json:"amount"`
+	// CategoryUUID selects a user EXPENSE category. Category is the legacy alternative: a category
+	// name or old enum code (e.g. "FOOD"), matched case-insensitively. One of them is required.
+	CategoryUUID string    `json:"categoryUuid"`
+	Category     string    `json:"category"`
+	Note         *string   `json:"note,omitempty"`
+	Date         time.Time `json:"date"`
 }
 
 type UpdateExpenseRequest struct {
-	AssetUUID *string                 `json:"assetUuid,omitempty"`
-	Amount    *decimal.Decimal        `json:"amount,omitempty"`
-	Category  *models.ExpenseCategory `json:"category,omitempty"`
-	Note      *string                 `json:"note,omitempty"`
-	Date      *time.Time              `json:"date,omitempty"`
+	AssetUUID    *string          `json:"assetUuid,omitempty"`
+	Amount       *decimal.Decimal `json:"amount,omitempty"`
+	CategoryUUID *string          `json:"categoryUuid,omitempty"`
+	Category     *string          `json:"category,omitempty"` // legacy, see CreateExpenseRequest
+	Note         *string          `json:"note,omitempty"`
+	Date         *time.Time       `json:"date,omitempty"`
 }

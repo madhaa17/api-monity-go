@@ -16,13 +16,14 @@ import (
 const incomeInsufficientMsg = "this change would make the cash asset balance negative"
 
 type IncomeService struct {
-	repo      port.IncomeRepository
-	assetRepo port.AssetRepository
-	tx        port.Transactor
+	repo         port.IncomeRepository
+	assetRepo    port.AssetRepository
+	categoryRepo port.CategoryRepository
+	tx           port.Transactor
 }
 
-func NewIncomeService(repo port.IncomeRepository, assetRepo port.AssetRepository, tx port.Transactor) port.IncomeService {
-	return &IncomeService{repo: repo, assetRepo: assetRepo, tx: tx}
+func NewIncomeService(repo port.IncomeRepository, assetRepo port.AssetRepository, categoryRepo port.CategoryRepository, tx port.Transactor) port.IncomeService {
+	return &IncomeService{repo: repo, assetRepo: assetRepo, categoryRepo: categoryRepo, tx: tx}
 }
 
 func (s *IncomeService) CreateIncome(ctx context.Context, userID int64, req port.CreateIncomeRequest) (*models.Income, error) {
@@ -39,8 +40,18 @@ func (s *IncomeService) CreateIncome(ctx context.Context, userID int64, req port
 		return nil, err
 	}
 
+	// Incomes predate categories, so an omitted category falls back to "Other".
+	categoryName := ""
+	if strings.TrimSpace(req.CategoryUUID) == "" {
+		categoryName = models.CategoryOther
+	}
+	category, err := resolveCategory(ctx, s.categoryRepo, userID, models.CategoryTypeIncome, req.CategoryUUID, categoryName)
+	if err != nil {
+		return nil, err
+	}
+
 	var income *models.Income
-	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+	err = s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
 		asset, err := lookupCashAsset(ctx, s.assetRepo, req.AssetUUID, userID)
 		if err != nil {
 			return err
@@ -49,12 +60,15 @@ func (s *IncomeService) CreateIncome(ctx context.Context, userID int64, req port
 			return err
 		}
 		income = &models.Income{
-			UserID:  userID,
-			AssetID: asset.ID,
-			Amount:  req.Amount,
-			Source:  req.Source,
-			Note:    req.Note,
-			Date:    req.Date,
+			UserID:       userID,
+			AssetID:      asset.ID,
+			Amount:       req.Amount,
+			Source:       req.Source,
+			CategoryID:   category.ID,
+			CategoryUUID: category.UUID,
+			CategoryName: category.Name,
+			Note:         req.Note,
+			Date:         req.Date,
 		}
 		if err := s.repo.Create(ctx, income); err != nil {
 			return fmt.Errorf("create income: %w", err)
@@ -111,6 +125,15 @@ func (s *IncomeService) UpdateIncome(ctx context.Context, userID int64, uuid str
 		return nil, err
 	}
 
+	var category *models.Category
+	if req.CategoryUUID != nil {
+		var err error
+		category, err = resolveCategory(ctx, s.categoryRepo, userID, models.CategoryTypeIncome, *req.CategoryUUID, "")
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var income *models.Income
 	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
 		var err error
@@ -150,6 +173,9 @@ func (s *IncomeService) UpdateIncome(ctx context.Context, userID int64, uuid str
 		income.AssetID = newAssetID
 		if req.Source != nil {
 			income.Source = *req.Source
+		}
+		if category != nil {
+			income.CategoryID, income.CategoryUUID, income.CategoryName = category.ID, category.UUID, category.Name
 		}
 		if req.Note != nil {
 			income.Note = req.Note

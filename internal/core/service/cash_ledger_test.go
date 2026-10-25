@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,21 +13,48 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// fakeLedger is an in-memory AssetRepository, ExpenseRepository, IncomeRepository and Transactor.
+// fakeLedger is an in-memory AssetRepository and Transactor; fakeExpenseRepo, fakeIncomeRepo and
+// fakeCategoryRepo share its state.
 // WithinTransaction snapshots state and restores it when fn fails, mimicking a rollback.
 type fakeLedger struct {
-	assets   map[int64]*models.Asset
-	expenses map[string]*models.Expense
-	incomes  map[string]*models.Income
-	nextID   int64
+	assets     map[int64]*models.Asset
+	expenses   map[string]*models.Expense
+	incomes    map[string]*models.Income
+	categories map[int64]*models.Category
+	nextID     int64
 }
 
 func newFakeLedger() *fakeLedger {
 	return &fakeLedger{
-		assets:   map[int64]*models.Asset{},
-		expenses: map[string]*models.Expense{},
-		incomes:  map[string]*models.Income{},
+		assets:     map[int64]*models.Asset{},
+		expenses:   map[string]*models.Expense{},
+		incomes:    map[string]*models.Income{},
+		categories: map[int64]*models.Category{},
 	}
+}
+
+func (f *fakeLedger) addCategory(userID int64, typ models.CategoryType, name string) *models.Category {
+	f.nextID++
+	c := &models.Category{ID: f.nextID, UUID: "category-" + name + "-" + string(typ), UserID: userID, Type: typ, Name: name}
+	f.categories[c.ID] = c
+	return c
+}
+
+func (f *fakeLedger) addDefaultCategories(userID int64) {
+	for typ, names := range models.DefaultCategories {
+		for _, name := range names {
+			f.addCategory(userID, typ, name)
+		}
+	}
+}
+
+func (f *fakeLedger) category(typ models.CategoryType, name string) *models.Category {
+	for _, c := range f.categories {
+		if c.Type == typ && c.Name == name {
+			return c
+		}
+	}
+	return nil
 }
 
 func (f *fakeLedger) addAsset(userID int64, typ models.AssetType, balance string) *models.Asset {
@@ -60,12 +88,10 @@ func (f *fakeLedger) WithinTransaction(ctx context.Context, fn func(ctx context.
 		}
 		f.expenses = map[string]*models.Expense{}
 		for k, e := range expenses {
-			e := e
 			f.expenses[k] = &e
 		}
 		f.incomes = map[string]*models.Income{}
 		for k, i := range incomes {
-			i := i
 			f.incomes[k] = &i
 		}
 	}
@@ -179,6 +205,88 @@ func (r fakeIncomeRepo) Delete(ctx context.Context, uuid string, userID int64) e
 	return nil
 }
 
+// CategoryRepository
+
+type fakeCategoryRepo struct{ *fakeLedger }
+
+func (r fakeCategoryRepo) Create(ctx context.Context, c *models.Category) error {
+	if existing, _ := r.GetByName(ctx, c.UserID, c.Type, c.Name); existing != nil {
+		return port.ErrConflict
+	}
+	r.nextID++
+	c.ID = r.nextID
+	c.UUID = "category-" + c.Name + "-" + string(c.Type)
+	copied := *c
+	r.categories[c.ID] = &copied
+	return nil
+}
+func (r fakeCategoryRepo) CreateDefaults(ctx context.Context, userID int64) error {
+	r.addDefaultCategories(userID)
+	return nil
+}
+func (r fakeCategoryRepo) GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Category, error) {
+	for _, c := range r.categories {
+		if c.UUID == uuid && c.UserID == userID {
+			copied := *c
+			return &copied, nil
+		}
+	}
+	return nil, nil
+}
+func (r fakeCategoryRepo) GetByName(ctx context.Context, userID int64, typ models.CategoryType, name string) (*models.Category, error) {
+	for _, c := range r.categories {
+		if c.UserID == userID && c.Type == typ && strings.EqualFold(c.Name, name) {
+			copied := *c
+			return &copied, nil
+		}
+	}
+	return nil, nil
+}
+func (r fakeCategoryRepo) ListByUserID(ctx context.Context, userID int64, typ *models.CategoryType) ([]models.Category, error) {
+	return nil, nil
+}
+func (r fakeCategoryRepo) Update(ctx context.Context, c *models.Category) error {
+	for _, other := range r.categories {
+		if other.ID != c.ID && other.UserID == c.UserID && other.Type == c.Type && strings.EqualFold(other.Name, c.Name) {
+			return port.ErrConflict
+		}
+	}
+	copied := *c
+	r.categories[c.ID] = &copied
+	return nil
+}
+func (r fakeCategoryRepo) Delete(ctx context.Context, id int64) error {
+	delete(r.categories, id)
+	return nil
+}
+func (r fakeCategoryRepo) CountUsage(ctx context.Context, id int64) (int64, error) {
+	var n int64
+	for _, e := range r.expenses {
+		if e.CategoryID == id {
+			n++
+		}
+	}
+	for _, i := range r.incomes {
+		if i.CategoryID == id {
+			n++
+		}
+	}
+	return n, nil
+}
+func (r fakeCategoryRepo) Reassign(ctx context.Context, fromID, toID int64) error {
+	for _, e := range r.expenses {
+		if e.CategoryID == fromID {
+			e.CategoryID = toID
+		}
+	}
+	for _, i := range r.incomes {
+		if i.CategoryID == fromID {
+			i.CategoryID = toID
+		}
+	}
+	return nil
+}
+
 const testUser int64 = 1
 
 var testDate = time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
@@ -231,11 +339,12 @@ func TestExpenseService(t *testing.T) {
 		f := newFakeLedger()
 		wallet := f.addAsset(testUser, models.AssetTypeCash, "100.00")
 		bank := f.addAsset(testUser, models.AssetTypeCash, "50.00")
-		return f, NewExpenseService(fakeExpenseRepo{f}, f, f), wallet, bank
+		f.addDefaultCategories(testUser)
+		return f, NewExpenseService(fakeExpenseRepo{f}, f, fakeCategoryRepo{f}, f), wallet, bank
 	}
 	create := func(svc port.ExpenseService, asset *models.Asset, amount string) (*models.Expense, error) {
 		return svc.CreateExpense(ctx, testUser, port.CreateExpenseRequest{
-			AssetUUID: asset.UUID, Amount: dec(amount), Category: models.ExpenseCategoryFood, Date: testDate,
+			AssetUUID: asset.UUID, Amount: dec(amount), Category: "FOOD", Date: testDate,
 		})
 	}
 
@@ -263,7 +372,7 @@ func TestExpenseService(t *testing.T) {
 
 	t.Run("create requires date and CASH asset", func(t *testing.T) {
 		f, svc, wallet, _ := setup()
-		_, err := svc.CreateExpense(ctx, testUser, port.CreateExpenseRequest{AssetUUID: wallet.UUID, Amount: dec("1"), Category: models.ExpenseCategoryFood})
+		_, err := svc.CreateExpense(ctx, testUser, port.CreateExpenseRequest{AssetUUID: wallet.UUID, Amount: dec("1"), Category: "FOOD"})
 		wantValidation(t, err, "date is required")
 
 		stock := f.addAsset(testUser, models.AssetTypeStock, "10")
@@ -342,7 +451,8 @@ func TestIncomeService(t *testing.T) {
 	setup := func() (*fakeLedger, port.IncomeService, port.ExpenseService, *models.Asset) {
 		f := newFakeLedger()
 		wallet := f.addAsset(testUser, models.AssetTypeCash, "0")
-		return f, NewIncomeService(fakeIncomeRepo{f}, f, f), NewExpenseService(fakeExpenseRepo{f}, f, f), wallet
+		f.addDefaultCategories(testUser)
+		return f, NewIncomeService(fakeIncomeRepo{f}, f, fakeCategoryRepo{f}, f), NewExpenseService(fakeExpenseRepo{f}, f, fakeCategoryRepo{f}, f), wallet
 	}
 
 	t.Run("create adds balance", func(t *testing.T) {
@@ -358,7 +468,7 @@ func TestIncomeService(t *testing.T) {
 	t.Run("deleting an already-spent income is rejected", func(t *testing.T) {
 		f, svc, expenses, wallet := setup()
 		inc, _ := svc.CreateIncome(ctx, testUser, port.CreateIncomeRequest{AssetUUID: wallet.UUID, Amount: dec("100"), Source: "Salary", Date: testDate})
-		if _, err := expenses.CreateExpense(ctx, testUser, port.CreateExpenseRequest{AssetUUID: wallet.UUID, Amount: dec("70"), Category: models.ExpenseCategoryFood, Date: testDate}); err != nil {
+		if _, err := expenses.CreateExpense(ctx, testUser, port.CreateExpenseRequest{AssetUUID: wallet.UUID, Amount: dec("70"), Category: "FOOD", Date: testDate}); err != nil {
 			t.Fatal(err)
 		}
 		wantValidation(t, svc.DeleteIncome(ctx, testUser, inc.UUID), incomeInsufficientMsg)

@@ -25,7 +25,7 @@ func (r *UserRepo) Create(ctx context.Context, user *models.User) error {
 		user.Role = models.UserRoleUser
 	}
 
-	result := r.db.WithContext(ctx).Create(user)
+	result := conn(ctx, r.db).Create(user)
 	if result.Error != nil {
 		return fmt.Errorf("create user: %w", result.Error)
 	}
@@ -34,7 +34,7 @@ func (r *UserRepo) Create(ctx context.Context, user *models.User) error {
 
 func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
-	result := r.db.WithContext(ctx).Where("email = ?", email).First(&user)
+	result := conn(ctx, r.db).Where("email = ?", email).First(&user)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, nil // Return nil if not found
@@ -46,7 +46,7 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, 
 
 func (r *UserRepo) GetByID(ctx context.Context, id int64) (*models.User, error) {
 	var user models.User
-	result := r.db.WithContext(ctx).First(&user, id)
+	result := conn(ctx, r.db).First(&user, id)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, nil

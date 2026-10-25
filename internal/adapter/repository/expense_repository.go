@@ -34,12 +34,13 @@ func (r *ExpenseRepo) GetByUUID(ctx context.Context, uuid string, userID int64) 
 }
 
 func (r *ExpenseRepo) GetByUUIDForUpdate(ctx context.Context, uuid string, userID int64) (*models.Expense, error) {
-	return r.getByUUID(conn(ctx, r.db).Clauses(clause.Locking{Strength: "UPDATE"}), uuid, userID)
+	lock := clause.Locking{Strength: "UPDATE", Table: clause.Table{Name: "expenses"}}
+	return r.getByUUID(conn(ctx, r.db).Clauses(lock), uuid, userID)
 }
 
 func (r *ExpenseRepo) getByUUID(db *gorm.DB, uuid string, userID int64) (*models.Expense, error) {
 	var expense models.Expense
-	result := db.Where("uuid = ? AND user_id = ?", uuid, userID).First(&expense)
+	result := withCategory(db, "expenses").Where("expenses.uuid = ? AND expenses.user_id = ?", uuid, userID).First(&expense)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -50,32 +51,28 @@ func (r *ExpenseRepo) getByUUID(db *gorm.DB, uuid string, userID int64) (*models
 }
 
 func (r *ExpenseRepo) ListByUserID(ctx context.Context, userID int64, dateFrom, dateTo *time.Time, page, limit int) ([]models.Expense, int64, error) {
-	q := conn(ctx, r.db).Model(&models.Expense{}).Where("user_id = ?", userID)
-	if dateFrom != nil {
-		q = q.Where("date >= ?", dateFrom)
-	}
-	if dateTo != nil {
-		end := dateTo.AddDate(0, 0, 1)
-		q = q.Where("date < ?", end)
+	filter := func(q *gorm.DB) *gorm.DB {
+		q = q.Where("expenses.user_id = ?", userID)
+		if dateFrom != nil {
+			q = q.Where("expenses.date >= ?", dateFrom)
+		}
+		if dateTo != nil {
+			q = q.Where("expenses.date < ?", dateTo.AddDate(0, 0, 1))
+		}
+		return q
 	}
 	var total int64
-	if err := q.Count(&total).Error; err != nil {
+	if err := filter(conn(ctx, r.db).Model(&models.Expense{})).Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("count expenses: %w", err)
 	}
-	var expenses []models.Expense
 	offset := (page - 1) * limit
 	if offset < 0 {
 		offset = 0
 	}
-	result := conn(ctx, r.db).Where("user_id = ?", userID).Order("date desc, created_at desc")
-	if dateFrom != nil {
-		result = result.Where("date >= ?", dateFrom)
-	}
-	if dateTo != nil {
-		end := dateTo.AddDate(0, 0, 1)
-		result = result.Where("date < ?", end)
-	}
-	result = result.Offset(offset).Limit(limit).Find(&expenses)
+	var expenses []models.Expense
+	result := filter(withCategory(conn(ctx, r.db), "expenses")).
+		Order("expenses.date desc, expenses.created_at desc").
+		Offset(offset).Limit(limit).Find(&expenses)
 	if result.Error != nil {
 		return nil, 0, fmt.Errorf("list expenses: %w", result.Error)
 	}

@@ -82,6 +82,13 @@ func adjustCashBalance(ctx context.Context, assetRepo port.AssetRepository, asse
 	return nil
 }
 
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
 func listMeta(total int64, page, limit int) port.ListMeta {
 	totalPages := int((total + int64(limit) - 1) / int64(limit))
 	return port.ListMeta{Total: total, Page: page, Limit: limit, TotalPages: totalPages}

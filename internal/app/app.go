@@ -37,13 +37,15 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 	receivablePaymentRepo := repository.NewReceivablePaymentRepository(db)
 	assetPriceHistoryRepo := repository.NewAssetPriceHistoryRepository(db)
 	insightRepo := repository.NewInsightRepository(db)
+	categoryRepo := repository.NewCategoryRepository(db)
 	transactor := repository.NewTransactor(db)
 
-	authSvc := service.NewAuthService(userRepo, cfg, c)
+	authSvc := service.NewAuthService(userRepo, categoryRepo, transactor, cfg, c)
 	assetSvc := service.NewAssetService(assetRepo)
 	activitySvc := service.NewActivityService(expenseRepo, incomeRepo, debtRepo, receivableRepo)
-	expenseSvc := service.NewExpenseService(expenseRepo, assetRepo, transactor)
-	incomeSvc := service.NewIncomeService(incomeRepo, assetRepo, transactor)
+	expenseSvc := service.NewExpenseService(expenseRepo, assetRepo, categoryRepo, transactor)
+	incomeSvc := service.NewIncomeService(incomeRepo, assetRepo, categoryRepo, transactor)
+	categorySvc := service.NewCategoryService(categoryRepo, transactor)
 	savingGoalSvc := service.NewSavingGoalService(savingGoalRepo)
 	debtSvc := service.NewDebtService(debtRepo, debtPaymentRepo, assetRepo)
 	receivableSvc := service.NewReceivableService(receivableRepo, receivablePaymentRepo, assetRepo)
@@ -61,6 +63,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 		Activity:          handler.NewActivityHandler(activitySvc),
 		Expense:           handler.NewExpenseHandler(expenseSvc),
 		Income:            handler.NewIncomeHandler(incomeSvc),
+		Category:          handler.NewCategoryHandler(categorySvc),
 		SavingGoal:        handler.NewSavingGoalHandler(savingGoalSvc),
 		Debt:              handler.NewDebtHandler(debtSvc),
 		Receivable:        handler.NewReceivableHandler(receivableSvc),

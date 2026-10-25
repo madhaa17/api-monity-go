@@ -1,7 +1,7 @@
 {
 	"info": {
 		"name": "Monity — Finance Tracker API",
-		"description": "Complete API collection for Monity finance tracker backend.\n\n**Setup:**\n1. Set `base_url` variable (e.g. `http://localhost:8080` or `https://api-assetmonitor.my.id`)\n2. Call Login/Register — token is auto-saved to `token` variable\n3. All authenticated requests use `{{token}}` in Bearer header\n\n**Variable auto-capture:**\n- Login/Register → `token`, `refresh_token`\n- Create Asset → `asset_uuid`, `cash_asset_uuid` (if CASH)\n- Create Expense → `expense_uuid`\n- Create Income → `income_uuid`\n- Create Saving Goal → `saving_goal_uuid`\n- Create Debt → `debt_uuid`\n- Create Receivable → `receivable_uuid`\n\n**Default currency:** IDR (all endpoints default to IDR if no `?currency=` param)",
+		"description": "Complete API collection for Monity finance tracker backend.\n\n**Setup:**\n1. Set `base_url` variable (e.g. `http://localhost:8080` or `https://api-assetmonitor.my.id`)\n2. Call Login/Register — token is auto-saved to `token` variable\n3. All authenticated requests use `{{token}}` in Bearer header\n\n**Variable auto-capture:**\n- Login/Register → `token`, `refresh_token`\n- Create Asset → `asset_uuid`, `cash_asset_uuid` (if CASH)\n- Create Category → `category_uuid` (set `income_category_uuid` and `reassign_category_uuid` by hand from List Categories)\n- Create Expense → `expense_uuid`\n- Create Income → `income_uuid`\n- Create Saving Goal → `saving_goal_uuid`\n- Create Debt → `debt_uuid`\n- Create Receivable → `receivable_uuid`\n\n**Default currency:** IDR (all endpoints default to IDR if no `?currency=` param)",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
@@ -14,7 +14,10 @@
 		{ "key": "income_uuid", "value": "", "type": "string" },
 		{ "key": "saving_goal_uuid", "value": "", "type": "string" },
 		{ "key": "debt_uuid", "value": "", "type": "string" },
-		{ "key": "receivable_uuid", "value": "", "type": "string" }
+		{ "key": "receivable_uuid", "value": "", "type": "string" },
+		{ "key": "category_uuid", "value": "" },
+		{ "key": "income_category_uuid", "value": "" },
+		{ "key": "reassign_category_uuid", "value": "" }
 	],
 	"item": [
 		{
@@ -169,10 +172,7 @@
 							"raw": "{{base_url}}/api/v1/activities?group_by=day&date=today",
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "activities"],
-							"query": [
-								{ "key": "group_by", "value": "day" },
-								{ "key": "date", "value": "today" }
-							]
+							"query": [{ "key": "group_by", "value": "day" }, { "key": "date", "value": "today" }]
 						}
 					}
 				},
@@ -503,9 +503,7 @@
 							"raw": "{{base_url}}/api/v1/assets/:uuid/prices?limit=10",
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "assets", ":uuid", "prices"],
-							"query": [
-								{ "key": "limit", "value": "10" }
-							],
+							"query": [{ "key": "limit", "value": "10" }],
 							"variable": [
 								{ "key": "uuid", "value": "{{asset_uuid}}", "description": "Asset UUID" }
 							]
@@ -523,6 +521,141 @@
 							"path": ["api", "v1", "assets", ":uuid", "prices", "fetch"],
 							"variable": [
 								{ "key": "uuid", "value": "{{asset_uuid}}", "description": "Asset UUID (must be CRYPTO or STOCK)" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Categories",
+			"description": "Per-user INCOME/EXPENSE categories. New users get defaults (Food, Transport, … / Salary, Bonus, …). A category still in use can only be deleted with `reassign_to`.",
+			"item": [
+				{
+					"name": "List Categories",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories"]
+						}
+					}
+				},
+				{
+					"name": "List Expense Categories",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories?type=EXPENSE",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories"],
+							"query": [{ "key": "type", "value": "EXPENSE" }]
+						}
+					}
+				},
+				{
+					"name": "List Income Categories",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories?type=INCOME",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories"],
+							"query": [{ "key": "type", "value": "INCOME" }]
+						}
+					}
+				},
+				{
+					"name": "Create Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories"]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"EXPENSE\",\n  \"name\": \"Kopi\",\n  \"color\": \"#A16207\"\n}"
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"  var json = pm.response.json();",
+									"  pm.collectionVariables.set('category_uuid', json.data.uuid);",
+									"}"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Category by UUID",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{category_uuid}}" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Category",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories/:uuid",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories", ":uuid"],
+							"variable": [
+								{ "key": "uuid", "value": "{{category_uuid}}" }
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Kopi & Teh\",\n  \"color\": \"#B45309\"\n}"
+						}
+					}
+				},
+				{
+					"name": "Delete Category (reassign transactions)",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories/:uuid?reassign_to={{reassign_category_uuid}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories", ":uuid"],
+							"query": [
+								{
+									"key": "reassign_to",
+									"value": "{{reassign_category_uuid}}",
+									"description": "Category of the same type that receives this category's expenses/incomes. Required when the category is in use."
+								}
+							],
+							"variable": [
+								{ "key": "uuid", "value": "{{category_uuid}}" }
 							]
 						}
 					}
@@ -556,13 +689,14 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"assetUuid\": \"{{cash_asset_uuid}}\",\n  \"amount\": 150000,\n  \"category\": \"FOOD\",\n  \"note\": \"Belanja bulanan Indomaret\",\n  \"date\": \"2026-02-09T00:00:00Z\"\n}"
+							"raw": "{\n  \"assetUuid\": \"{{cash_asset_uuid}}\",\n  \"amount\": 150000,\n  \"categoryUuid\": \"{{category_uuid}}\",\n  \"note\": \"Belanja bulanan Indomaret\",\n  \"date\": \"2026-02-09T00:00:00Z\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/expenses",
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "expenses"]
-						}
+						},
+						"description": "`categoryUuid` is an EXPENSE category (GET /categories?type=EXPENSE). The legacy `category` name (e.g. \"FOOD\") is still accepted when `categoryUuid` is omitted. Returns 400 when the cash balance is too low."
 					}
 				},
 				{
@@ -575,6 +709,47 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "expenses"]
 						}
+					}
+				},
+				{
+					"name": "List Expenses (filtered + sorted)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/expenses?page=1&limit=20&month=2026-02&category={{category_uuid}}&asset={{cash_asset_uuid}}&q=makan&min_amount=10000&max_amount=1000000&sort=-amount",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "expenses"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "limit", "value": "20" },
+								{ "key": "month", "value": "2026-02", "description": "YYYY-MM; or use date_from/date_to (YYYY-MM-DD) or year" },
+								{ "key": "category", "value": "{{category_uuid}}", "description": "Comma-separated category UUIDs" },
+								{ "key": "asset", "value": "{{cash_asset_uuid}}", "description": "CASH asset UUID" },
+								{ "key": "q", "value": "makan", "description": "Case-insensitive search" },
+								{ "key": "min_amount", "value": "10000" },
+								{ "key": "max_amount", "value": "1000000" },
+								{ "key": "sort", "value": "-amount", "description": "date | -date (default) | amount | -amount" }
+							]
+						},
+						"description": "All filters are optional and combine with AND. Malformed values return 400."
+					}
+				},
+				{
+					"name": "Expense Summary",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/expenses/summary?month=2026-02&group_by=day",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "expenses", "summary"],
+							"query": [
+								{ "key": "month", "value": "2026-02", "description": "Same filters as the list" },
+								{ "key": "group_by", "value": "day", "description": "day (default) | month" }
+							]
+						},
+						"description": "Total, count, average, per-category breakdown and a day/month series for the matching expenses."
 					}
 				},
 				{
@@ -602,7 +777,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"amount\": 200000,\n  \"note\": \"Belanja bulanan — revisi\"\n}"
+							"raw": "{\n  \"amount\": 200000,\n  \"note\": \"Belanja bulanan — revisi\",\n  \"categoryUuid\": \"{{category_uuid}}\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/expenses/:uuid",
@@ -658,13 +833,14 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"assetUuid\": \"{{cash_asset_uuid}}\",\n  \"amount\": 8000000,\n  \"source\": \"Gaji\",\n  \"note\": \"Gaji Februari 2026\",\n  \"date\": \"2026-02-01T00:00:00Z\"\n}"
+							"raw": "{\n  \"assetUuid\": \"{{cash_asset_uuid}}\",\n  \"amount\": 8000000,\n  \"source\": \"Gaji\",\n  \"categoryUuid\": \"{{income_category_uuid}}\",\n  \"note\": \"Gaji Februari 2026\",\n  \"date\": \"2026-02-01T00:00:00Z\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/incomes",
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "incomes"]
-						}
+						},
+						"description": "`categoryUuid` is an INCOME category (GET /categories?type=INCOME); defaults to \"Other\" when omitted."
 					}
 				},
 				{
@@ -677,6 +853,47 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "incomes"]
 						}
+					}
+				},
+				{
+					"name": "List Incomes (filtered + sorted)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/incomes?page=1&limit=20&month=2026-02&category={{category_uuid}}&asset={{cash_asset_uuid}}&q=gaji&min_amount=10000&max_amount=1000000&sort=-amount",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "incomes"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "limit", "value": "20" },
+								{ "key": "month", "value": "2026-02", "description": "YYYY-MM; or use date_from/date_to (YYYY-MM-DD) or year" },
+								{ "key": "category", "value": "{{category_uuid}}", "description": "Comma-separated category UUIDs" },
+								{ "key": "asset", "value": "{{cash_asset_uuid}}", "description": "CASH asset UUID" },
+								{ "key": "q", "value": "gaji", "description": "Case-insensitive search" },
+								{ "key": "min_amount", "value": "10000" },
+								{ "key": "max_amount", "value": "1000000" },
+								{ "key": "sort", "value": "-amount", "description": "date | -date (default) | amount | -amount" }
+							]
+						},
+						"description": "All filters are optional and combine with AND. Malformed values return 400."
+					}
+				},
+				{
+					"name": "Income Summary",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/v1/incomes/summary?month=2026-02&group_by=day",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "incomes", "summary"],
+							"query": [
+								{ "key": "month", "value": "2026-02", "description": "Same filters as the list" },
+								{ "key": "group_by", "value": "day", "description": "day (default) | month" }
+							]
+						},
+						"description": "Total, count, average, per-category breakdown and a day/month series for the matching incomes."
 					}
 				},
 				{
@@ -704,7 +921,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"amount\": 8500000,\n  \"note\": \"Gaji Februari — ada bonus\"\n}"
+							"raw": "{\n  \"amount\": 8500000,\n  \"note\": \"Gaji Februari — ada bonus\",\n  \"categoryUuid\": \"{{income_category_uuid}}\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/incomes/:uuid",
@@ -1065,9 +1282,7 @@
 							"raw": "{{base_url}}/api/v1/prices/crypto/:symbol?currency=USD",
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "prices", "crypto", ":symbol"],
-							"query": [
-								{ "key": "currency", "value": "USD" }
-							],
+							"query": [{ "key": "currency", "value": "USD" }],
 							"variable": [
 								{ "key": "symbol", "value": "BTC", "description": "Crypto ticker: BTC, ETH, SOL, USDT, BNB, etc." }
 							]
@@ -1096,9 +1311,7 @@
 							"raw": "{{base_url}}/api/v1/prices/stock/:symbol?currency=USD",
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "prices", "stock", ":symbol"],
-							"query": [
-								{ "key": "currency", "value": "USD" }
-							],
+							"query": [{ "key": "currency", "value": "USD" }],
 							"variable": [
 								{ "key": "symbol", "value": "BBCA", "description": "Stock ticker: BBRI, BBCA, TLKM, etc." }
 							]
@@ -1168,9 +1381,7 @@
 							"raw": "{{base_url}}/api/v1/portfolio?currency=USD",
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "portfolio"],
-							"query": [
-								{ "key": "currency", "value": "USD" }
-							]
+							"query": [{ "key": "currency", "value": "USD" }]
 						}
 					}
 				},
@@ -1249,9 +1460,7 @@
 							"raw": "{{base_url}}/api/v1/insights/cashflow?month=2026-02",
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "insights", "cashflow"],
-							"query": [
-								{ "key": "month", "value": "2026-02" }
-							]
+							"query": [{ "key": "month", "value": "2026-02" }]
 						}
 					}
 				},

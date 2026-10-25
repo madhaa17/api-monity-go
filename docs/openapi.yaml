@@ -22,6 +22,8 @@ tags:
     description: Income entries
   - name: expenses
     description: Expense entries
+  - name: categories
+    description: Per-user income and expense categories
   - name: saving-goals
     description: Saving goals
   - name: debts
@@ -353,7 +355,11 @@ paths:
   /incomes:
     get:
       tags: [incomes]
-      summary: List incomes (paginated, optional date filter)
+      summary: List incomes (paginated, filterable, sortable)
+      description: |
+        All filters are optional and combine with AND. Malformed values (bad date, non-UUID category,
+        non-numeric amount, unknown sort), date_from after date_to, min_amount above max_amount,
+        more than 50 categories or a search longer than 100 characters return 400.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -361,6 +367,12 @@ paths:
         - $ref: '#/components/parameters/DateTo'
         - $ref: '#/components/parameters/Month'
         - $ref: '#/components/parameters/Year'
+        - $ref: '#/components/parameters/CategoryFilter'
+        - $ref: '#/components/parameters/AssetFilter'
+        - $ref: '#/components/parameters/IncomeSearch'
+        - $ref: '#/components/parameters/MinAmount'
+        - $ref: '#/components/parameters/MaxAmount'
+        - $ref: '#/components/parameters/TransactionSort'
       responses:
         '200':
           description: Paginated list of incomes
@@ -372,6 +384,8 @@ paths:
                   - type: object
                     properties:
                       data: { $ref: '#/components/schemas/ListResponseIncome' }
+        '400':
+          description: Invalid filter or sort
         '401':
           description: Unauthorized
     post:
@@ -382,6 +396,8 @@ paths:
         content:
           application/json:
             schema: { $ref: '#/components/schemas/CreateIncomeRequest' }
+      description: |
+        Adds the amount to the CASH asset atomically.
       responses:
         '201':
           description: Income created
@@ -395,6 +411,40 @@ paths:
                       data: { $ref: '#/components/schemas/Income' }
         '400':
           description: Bad request
+        '401':
+          description: Unauthorized
+
+  /incomes/summary:
+    get:
+      tags: [incomes]
+      summary: Totals for the incomes matching a filter
+      description: |
+        Takes the same filters as `GET /incomes` (paging and sort are ignored) and returns the total,
+        count and average, a per-category breakdown (largest first) and a day or month series.
+      parameters:
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/Month'
+        - $ref: '#/components/parameters/Year'
+        - $ref: '#/components/parameters/CategoryFilter'
+        - $ref: '#/components/parameters/AssetFilter'
+        - $ref: '#/components/parameters/IncomeSearch'
+        - $ref: '#/components/parameters/MinAmount'
+        - $ref: '#/components/parameters/MaxAmount'
+        - $ref: '#/components/parameters/SummaryGroupBy'
+      responses:
+        '200':
+          description: Summary of the matching incomes
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TransactionSummary' }
+        '400':
+          description: Invalid filter or group_by
         '401':
           description: Unauthorized
 
@@ -424,6 +474,9 @@ paths:
       summary: Update income
       parameters:
         - $ref: '#/components/parameters/UuidPath'
+      description: |
+        Partial update. Changing the amount or the asset moves the difference between cash assets
+        atomically; returns 400 when that would make a balance negative.
       requestBody:
         content:
           application/json:
@@ -462,7 +515,11 @@ paths:
   /expenses:
     get:
       tags: [expenses]
-      summary: List expenses (paginated, optional date filter)
+      summary: List expenses (paginated, filterable, sortable)
+      description: |
+        All filters are optional and combine with AND. Malformed values (bad date, non-UUID category,
+        non-numeric amount, unknown sort), date_from after date_to, min_amount above max_amount,
+        more than 50 categories or a search longer than 100 characters return 400.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -470,6 +527,12 @@ paths:
         - $ref: '#/components/parameters/DateTo'
         - $ref: '#/components/parameters/Month'
         - $ref: '#/components/parameters/Year'
+        - $ref: '#/components/parameters/CategoryFilter'
+        - $ref: '#/components/parameters/AssetFilter'
+        - $ref: '#/components/parameters/ExpenseSearch'
+        - $ref: '#/components/parameters/MinAmount'
+        - $ref: '#/components/parameters/MaxAmount'
+        - $ref: '#/components/parameters/TransactionSort'
       responses:
         '200':
           description: Paginated list of expenses
@@ -481,6 +544,8 @@ paths:
                   - type: object
                     properties:
                       data: { $ref: '#/components/schemas/ListResponseExpense' }
+        '400':
+          description: Invalid filter or sort
         '401':
           description: Unauthorized
     post:
@@ -491,6 +556,8 @@ paths:
         content:
           application/json:
             schema: { $ref: '#/components/schemas/CreateExpenseRequest' }
+      description: |
+        Takes the amount from the CASH asset atomically. Returns 400 when the asset balance is too low.
       responses:
         '201':
           description: Expense created
@@ -504,6 +571,40 @@ paths:
                       data: { $ref: '#/components/schemas/Expense' }
         '400':
           description: Bad request
+        '401':
+          description: Unauthorized
+
+  /expenses/summary:
+    get:
+      tags: [expenses]
+      summary: Totals for the expenses matching a filter
+      description: |
+        Takes the same filters as `GET /expenses` (paging and sort are ignored) and returns the total,
+        count and average, a per-category breakdown (largest first) and a day or month series.
+      parameters:
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/Month'
+        - $ref: '#/components/parameters/Year'
+        - $ref: '#/components/parameters/CategoryFilter'
+        - $ref: '#/components/parameters/AssetFilter'
+        - $ref: '#/components/parameters/ExpenseSearch'
+        - $ref: '#/components/parameters/MinAmount'
+        - $ref: '#/components/parameters/MaxAmount'
+        - $ref: '#/components/parameters/SummaryGroupBy'
+      responses:
+        '200':
+          description: Summary of the matching expenses
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TransactionSummary' }
+        '400':
+          description: Invalid filter or group_by
         '401':
           description: Unauthorized
 
@@ -533,6 +634,9 @@ paths:
       summary: Update expense
       parameters:
         - $ref: '#/components/parameters/UuidPath'
+      description: |
+        Partial update. Changing the amount or the asset moves the difference between cash assets
+        atomically; returns 400 when that would make a balance negative.
       requestBody:
         content:
           application/json:
@@ -562,6 +666,128 @@ paths:
       responses:
         '200':
           description: Success
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  # --- Categories ---
+  /categories:
+    get:
+      tags: [categories]
+      summary: List the user's categories
+      description: New users get default categories (see Category). Sorted by type, then name.
+      parameters:
+        - name: type
+          in: query
+          schema: { type: string, enum: [INCOME, EXPENSE] }
+          description: Only categories of this type (case-insensitive)
+      responses:
+        '200':
+          description: Categories
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Category' } }
+        '400':
+          description: Invalid type
+        '401':
+          description: Unauthorized
+    post:
+      tags: [categories]
+      summary: Create category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCategoryRequest' }
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Category' }
+        '400':
+          description: Validation error, or a category with this name (case-insensitive) already exists for this type
+        '401':
+          description: Unauthorized
+
+  /categories/{uuid}:
+    get:
+      tags: [categories]
+      summary: Get category by UUID
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Category
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Category' }
+        '400':
+          description: Invalid UUID
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    put:
+      tags: [categories]
+      summary: Update category (rename, recolor, change icon)
+      description: The type cannot be changed. Existing incomes/expenses show the new name immediately.
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCategoryRequest' }
+      responses:
+        '200':
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Category' }
+        '400':
+          description: Validation error or duplicate name
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    delete:
+      tags: [categories]
+      summary: Delete category
+      description: |
+        A category that is still used by incomes/expenses can only be deleted with `reassign_to`:
+        those transactions are moved to that category in the same database transaction.
+      parameters:
+        - $ref: '#/components/parameters/UuidPath'
+        - name: reassign_to
+          in: query
+          schema: { type: string, format: uuid }
+          description: Category of the same type that receives this category's transactions. Required when it is in use.
+      responses:
+        '200':
+          description: Category deleted
+        '400':
+          description: Category in use without reassign_to, or reassign_to is invalid (not found, same category, other type)
         '401':
           description: Unauthorized
         '404':
@@ -1248,23 +1474,63 @@ components:
     DateFrom:
       name: date_from
       in: query
-      schema: { type: string, format: date }
-      description: Start date (ISO 8601). Inclusive. Ignored if month/year set.
+      schema: { type: string, format: date, example: "2025-02-01" }
+      description: Start date (YYYY-MM-DD, UTC), inclusive. Can be used without date_to. Takes precedence over month/year.
     DateTo:
       name: date_to
       in: query
-      schema: { type: string, format: date }
-      description: End date (ISO 8601). Inclusive. Ignored if month/year set.
+      schema: { type: string, format: date, example: "2025-02-28" }
+      description: End date (YYYY-MM-DD, UTC), inclusive (the whole day). Can be used without date_from. Takes precedence over month/year.
     Month:
       name: month
       in: query
       schema: { type: string, example: "2025-02" }
-      description: Shortcut for full month (YYYY-MM). Overrides date_from/date_to.
+      description: Whole month (YYYY-MM). Used only when date_from/date_to are not set.
     Year:
       name: year
       in: query
       schema: { type: string, example: "2025" }
-      description: Shortcut for full year. Overrides date_from/date_to when month not set.
+      description: Whole year (YYYY). Used only when date_from/date_to and month are not set.
+    CategoryFilter:
+      name: category
+      in: query
+      schema: { type: string, example: "3f1c…,9a2b…" }
+      description: Comma-separated category UUIDs; matches any of them.
+    AssetFilter:
+      name: asset
+      in: query
+      schema: { type: string, format: uuid }
+      description: Only transactions of this CASH asset.
+    IncomeSearch:
+      name: q
+      in: query
+      schema: { type: string }
+      description: Case-insensitive search in source and note.
+    ExpenseSearch:
+      name: q
+      in: query
+      schema: { type: string }
+      description: Case-insensitive search in note.
+    MinAmount:
+      name: min_amount
+      in: query
+      schema: { type: string, example: "10000" }
+      description: Minimum amount, inclusive (decimal).
+    MaxAmount:
+      name: max_amount
+      in: query
+      schema: { type: string, example: "500000.50" }
+      description: Maximum amount, inclusive (decimal).
+    TransactionSort:
+      name: sort
+      in: query
+      schema: { type: string, enum: [-date, date, -amount, amount], default: -date }
+      description: Sort field; a leading `-` sorts descending. Equal amounts are ordered newest first.
+    SummaryGroupBy:
+      name: group_by
+      in: query
+      schema: { type: string, enum: [day, month], default: day }
+      description: Period size of the summary series.
     Currency:
       name: currency
       in: query
@@ -1361,65 +1627,141 @@ components:
                 refreshToken: { type: string, description: Refresh JWT }
                 user: { $ref: '#/components/schemas/User' }
 
+    Money:
+      description: |
+        Positive amount with at most 2 decimals and less than 1e18. Requests accept a JSON number or a
+        decimal string; responses always use a decimal string to keep precision.
+      oneOf:
+        - { type: string, example: "125000.50" }
+        - { type: number, example: 125000.5 }
+
     CreateIncomeRequest:
       type: object
       required: [assetUuid, amount, source, date]
       properties:
-        assetUuid: { type: string, format: uuid }
-        amount: { type: number }
-        source: { type: string }
-        note: { type: string, nullable: true }
+        assetUuid: { type: string, format: uuid, description: CASH asset that receives the money }
+        amount: { $ref: '#/components/schemas/Money' }
+        source: { type: string, maxLength: 200 }
+        categoryUuid: { type: string, format: uuid, description: INCOME category; defaults to the user's "Other" category }
+        note: { type: string, nullable: true, maxLength: 500 }
         date: { type: string, format: date-time }
 
     UpdateIncomeRequest:
       type: object
+      description: Every field is optional; omitted fields keep their value.
       properties:
-        assetUuid: { type: string, format: uuid, nullable: true }
-        amount: { type: number, nullable: true }
-        source: { type: string, nullable: true }
-        note: { type: string, nullable: true }
-        date: { type: string, format: date-time, nullable: true }
+        assetUuid: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        source: { type: string, maxLength: 200 }
+        categoryUuid: { type: string, format: uuid }
+        note: { type: string, nullable: true, maxLength: 500 }
+        date: { type: string, format: date-time }
 
     Income:
       type: object
       properties:
-        uuid: { type: string }
-        amount: { type: number }
+        uuid: { type: string, format: uuid }
+        amount: { type: string, example: "1500000", description: Decimal string }
         source: { type: string }
+        categoryUuid: { type: string, format: uuid }
+        category: { type: string, example: Salary, description: Category name }
         note: { type: string, nullable: true }
         date: { type: string, format: date-time }
         createdAt: { type: string, format: date-time }
-        asset: { $ref: '#/components/schemas/Asset', nullable: true }
+        assetUuid: { type: string, format: uuid }
+        assetName: { type: string, example: Bank }
 
     CreateExpenseRequest:
       type: object
-      required: [assetUuid, amount, category, date]
+      required: [assetUuid, amount, date]
+      description: Send `categoryUuid`. The legacy `category` (category name such as `FOOD` or `Food`, case-insensitive) is still accepted when `categoryUuid` is omitted.
       properties:
-        assetUuid: { type: string, format: uuid }
-        amount: { type: number }
-        category: { type: string, enum: [FOOD, TRANSPORT, HOUSING, UTILITIES, HEALTH, ENTERTAINMENT, SHOPPING, OTHER] }
-        note: { type: string, nullable: true }
+        assetUuid: { type: string, format: uuid, description: CASH asset the money is taken from }
+        amount: { $ref: '#/components/schemas/Money' }
+        categoryUuid: { type: string, format: uuid, description: EXPENSE category }
+        category: { type: string, deprecated: true, description: Legacy category name }
+        note: { type: string, nullable: true, maxLength: 500 }
         date: { type: string, format: date-time }
 
     UpdateExpenseRequest:
       type: object
+      description: Every field is optional; omitted fields keep their value.
       properties:
-        assetUuid: { type: string, format: uuid, nullable: true }
-        amount: { type: number, nullable: true }
-        category: { type: string, enum: [FOOD, TRANSPORT, HOUSING, UTILITIES, HEALTH, ENTERTAINMENT, SHOPPING, OTHER], nullable: true }
-        note: { type: string, nullable: true }
-        date: { type: string, format: date-time, nullable: true }
+        assetUuid: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        categoryUuid: { type: string, format: uuid }
+        category: { type: string, deprecated: true, description: Legacy category name }
+        note: { type: string, nullable: true, maxLength: 500 }
+        date: { type: string, format: date-time }
 
     Expense:
       type: object
       properties:
-        uuid: { type: string }
-        amount: { type: number }
-        category: { type: string }
+        uuid: { type: string, format: uuid }
+        amount: { type: string, example: "45000", description: Decimal string }
+        categoryUuid: { type: string, format: uuid }
+        category: { type: string, example: Food, description: Category name }
         note: { type: string, nullable: true }
         date: { type: string, format: date-time }
         createdAt: { type: string, format: date-time }
-        asset: { $ref: '#/components/schemas/Asset', nullable: true }
+        assetUuid: { type: string, format: uuid }
+        assetName: { type: string, example: Dompet }
+
+    Category:
+      type: object
+      description: |
+        Per-user category. New users get these defaults —
+        EXPENSE: Food, Transport, Housing, Utilities, Health, Entertainment, Shopping, Other;
+        INCOME: Salary, Bonus, Business, Investment, Gift, Other.
+        Names are unique per user and type, ignoring case.
+      properties:
+        uuid: { type: string, format: uuid }
+        type: { type: string, enum: [INCOME, EXPENSE] }
+        name: { type: string, example: Food }
+        color: { type: string, nullable: true, example: "#22C55E" }
+        icon: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateCategoryRequest:
+      type: object
+      required: [type, name]
+      properties:
+        type: { type: string, enum: [INCOME, EXPENSE], description: Case-insensitive }
+        name: { type: string, maxLength: 50 }
+        color: { type: string, nullable: true, pattern: '^#[0-9A-Fa-f]{6}$', example: "#22C55E" }
+        icon: { type: string, nullable: true, maxLength: 50 }
+
+    UpdateCategoryRequest:
+      type: object
+      description: Every field is optional; omitted fields keep their value.
+      properties:
+        name: { type: string, maxLength: 50 }
+        color: { type: string, nullable: true, pattern: '^#[0-9A-Fa-f]{6}$' }
+        icon: { type: string, nullable: true, maxLength: 50 }
+
+    TransactionSummary:
+      type: object
+      properties:
+        total: { type: string, example: "1250000", description: Decimal string }
+        count: { type: integer }
+        average: { type: string, example: "62500", description: "Decimal string, rounded to 2 decimals" }
+        byCategory:
+          type: array
+          description: Largest total first
+          items: { $ref: '#/components/schemas/CategoryTotal' }
+        groupBy: { type: string, enum: [day, month] }
+        series:
+          type: array
+          description: Oldest period first; periods without transactions are omitted
+          items: { $ref: '#/components/schemas/PeriodTotal' }
+
+    PeriodTotal:
+      type: object
+      properties:
+        period: { type: string, example: "2025-02-14", description: YYYY-MM-DD (day) or YYYY-MM (month) }
+        total: { type: string, description: Decimal string }
+        count: { type: integer }
 
     CreateSavingGoalRequest:
       type: object
@@ -1643,9 +1985,12 @@ components:
     CategoryTotal:
       type: object
       properties:
-        category: { type: string }
-        total: { type: number }
-        percentage: { type: number }
+        categoryUuid: { type: string, format: uuid }
+        category: { type: string, description: Category name }
+        color: { type: string, nullable: true }
+        total: { type: string, description: Decimal string }
+        count: { type: integer }
+        percentage: { type: number, description: "Share of the total, 0-100" }
 
     MonthlyTrendPoint:
       type: object

@@ -29,4 +29,11 @@ type AssetValueResponse struct {
 	Value        decimal.Decimal `json:"value"`
 	Currency     string          `json:"currency"`
 	PriceSource  string          `json:"priceSource"`
+	// PriceAsOf is when CurrentPrice was fetched from the market; omitted for manual or purchase
+	// prices. PriceStale is true when the market source was unreachable and CurrentPrice is the
+	// last price fetched earlier.
+	PriceAsOf  *time.Time `json:"priceAsOf,omitempty"`
+	PriceStale bool       `json:"priceStale,omitempty"`
+	// LotSize is the number of units per lot when Quantity is counted in lots (IDX stocks).
+	LotSize int64 `json:"lotSize,omitempty"`
 }

@@ -1354,6 +1354,37 @@ paths:
           description: Unauthorized
 
   # --- Prices (external; optional auth) ---
+  /prices/search:
+    get:
+      tags: [prices]
+      summary: Search stock or crypto symbols (asset form symbol picker)
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema: { type: string, enum: [STOCK, CRYPTO] }
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 50, example: bbca }
+      security: []
+      responses:
+        '200':
+          description: Matching symbols (at most 10)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/SuccessEnvelope' }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/SymbolSearchResult' }
+        '400':
+          description: Invalid type or q too long
+        '502':
+          description: Upstream search failed
+
   /prices/crypto/{symbol}:
     get:
       tags: [prices]
@@ -1412,7 +1443,7 @@ paths:
         - $ref: '#/components/parameters/Currency'
         - name: days
           in: query
-          schema: { type: integer }
+          schema: { type: integer, enum: [1, 7, 14, 30, 90, 180, 365] }
         - name: range
           in: query
           schema: { type: string }
@@ -1971,6 +2002,17 @@ components:
         price: { type: number }
         source: { type: string }
         recordedAt: { type: string, format: date-time }
+
+    SymbolSearchResult:
+      type: object
+      properties:
+        symbol: { type: string, description: "Value to store on the asset: exchange-qualified for stocks (BBCA.JK, AAPL), ticker for crypto (BTC)" }
+        name: { type: string }
+        exchange: { type: string }
+        kind: { type: string, description: "Instrument kind, e.g. EQUITY, ETF, COIN" }
+        coinId: { type: string, description: CoinGecko id (crypto only) }
+        rank: { type: integer, description: CoinGecko market-cap rank (crypto only) }
+        lotSize: { type: integer, description: "Units per lot when quantity is counted in lots (100 for IDX)" }
 
     CashflowSummary:
       type: object

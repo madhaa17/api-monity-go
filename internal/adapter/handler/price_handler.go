@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	cryptoChartDaysAllowed = map[int]bool{1: true, 7: true, 14: true, 30: true, 90: true}
+	cryptoChartDaysAllowed = map[int]bool{1: true, 7: true, 14: true, 30: true, 90: true, 180: true, 365: true}
 	stockChartRangeAllowed = map[string]bool{
 		"1d": true, "5d": true, "1mo": true, "3mo": true, "6mo": true,
 		"1y": true, "2y": true, "5y": true, "10y": true, "ytd": true, "max": true,
@@ -41,7 +41,7 @@ func (h *PriceHandler) GetCryptoPrice(w http.ResponseWriter, r *http.Request) {
 
 	price, err := h.svc.GetCryptoPriceWithCurrency(r.Context(), symbol, currency)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "unsupported crypto symbol") {
 			response.ErrorWithLog(w, r, http.StatusNotFound, "price not found", err.Error())
 			return
 		}
@@ -67,7 +67,7 @@ func (h *PriceHandler) GetStockPrice(w http.ResponseWriter, r *http.Request) {
 
 	price, err := h.svc.GetStockPriceWithCurrency(r.Context(), symbol, currency)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "status 404") {
 			response.ErrorWithLog(w, r, http.StatusNotFound, "price not found", err.Error())
 			return
 		}
@@ -76,6 +76,28 @@ func (h *PriceHandler) GetStockPrice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Success(w, http.StatusOK, "stock price retrieved", price)
+}
+
+// SearchSymbols handles GET /prices/search?type=STOCK|CRYPTO&q=bbca for the asset form's symbol picker.
+func (h *PriceHandler) SearchSymbols(w http.ResponseWriter, r *http.Request) {
+	assetType := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("type")))
+	if assetType != "STOCK" && assetType != "CRYPTO" {
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "type must be one of: STOCK, CRYPTO", nil)
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(query) > 50 {
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "q must be at most 50 characters", nil)
+		return
+	}
+
+	results, err := h.svc.SearchSymbols(r.Context(), assetType, query)
+	if err != nil {
+		response.ErrorWithLog(w, r, http.StatusBadGateway, "failed to search symbols", err.Error())
+		return
+	}
+
+	response.Success(w, http.StatusOK, "symbols retrieved", results)
 }
 
 func (h *PriceHandler) GetCryptoChart(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +119,7 @@ func (h *PriceHandler) GetCryptoChart(w http.ResponseWriter, r *http.Request) {
 	}
 	days, err := strconv.Atoi(daysStr)
 	if err != nil || !cryptoChartDaysAllowed[days] {
-		response.ErrorWithLog(w, r, http.StatusBadRequest, "days must be one of: 1, 7, 14, 30, 90", nil)
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "days must be one of: 1, 7, 14, 30, 90, 180, 365", nil)
 		return
 	}
 

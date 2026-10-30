@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"monity/internal/core/port"
@@ -180,7 +179,7 @@ func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *model
 	if err != nil {
 		// Fallback: use purchase price when external price is unavailable (e.g. API down, no key)
 		if !asset.PurchasePrice.IsZero() {
-			effectiveQty := s.effectiveQuantity(asset)
+			effectiveQty := effectiveQuantity(asset, nil)
 			value := effectiveQty.Mul(asset.PurchasePrice)
 			return &port.AssetValueResponse{
 				UUID:         asset.UUID,
@@ -192,14 +191,16 @@ func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *model
 				Value:        value,
 				Currency:     assetCurrency,
 				PriceSource:  "fallback",
+				LotSize:      lotSizeOf(asset, nil),
 			}, nil
 		}
 		return nil, fmt.Errorf("get price for %s: %w", *asset.Symbol, err)
 	}
 
 	currentPrice := decimal.NewFromFloat(priceData.Price)
-	effectiveQty := s.effectiveQuantity(asset)
+	effectiveQty := effectiveQuantity(asset, priceData)
 	value := effectiveQty.Mul(currentPrice)
+	fetchedAt := priceData.FetchedAt
 
 	return &port.AssetValueResponse{
 		UUID:         asset.UUID,
@@ -211,16 +212,10 @@ func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *model
 		Value:        value,
 		Currency:     currency,
 		PriceSource:  priceData.Source,
+		PriceAsOf:    &fetchedAt,
+		PriceStale:   priceData.Stale,
+		LotSize:      lotSizeOf(asset, priceData),
 	}, nil
-}
-
-// effectiveQuantity returns the actual number of units for value calculation.
-// For IDX stocks, quantity is in lots (1 lot = 100 shares), so we multiply by 100.
-func (s *PortfolioService) effectiveQuantity(asset *models.Asset) decimal.Decimal {
-	if asset.Type == models.AssetTypeStock && asset.Symbol != nil && IsIDXStock(strings.ToUpper(*asset.Symbol)) {
-		return asset.Quantity.Mul(decimal.NewFromInt(IDXLotSize))
-	}
-	return asset.Quantity
 }
 
 func (s *PortfolioService) getSymbolString(symbol *string) string {

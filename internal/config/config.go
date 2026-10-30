@@ -41,10 +41,11 @@ type SecurityConfig struct {
 }
 
 type PriceAPIConfig struct {
-	CryptoAPI    string
-	CryptoAPIKey string
+	CryptoAPI    string // CoinGecko base URL, e.g. https://api.coingecko.com/api/v3
+	CryptoAPIKey string // optional CoinGecko Demo (or Pro) API key
 	StockAPI     string
-	CacheTTL     int // in seconds
+	FXAPI        string // fallback exchange-rate API (open.er-api.com format)
+	CacheTTL     int    // in seconds
 }
 
 type AppConfig struct {
@@ -107,9 +108,10 @@ func Load() (*Config, error) {
 			RefreshExpiration: getEnv("JWT_REFRESH_EXPIRATION_TIME", "168h"), // 7d default
 		},
 		PriceAPI: PriceAPIConfig{
-			CryptoAPI:    getEnv("CRYPTO_PRICE_API", "https://pro-api.coinmarketcap.com"),
+			CryptoAPI:    getEnv("CRYPTO_PRICE_API", "https://api.coingecko.com/api/v3"),
 			CryptoAPIKey: getEnv("CRYPTO_PRICE_API_KEY", ""),
 			StockAPI:     getEnv("STOCK_PRICE_API", "https://query1.finance.yahoo.com"),
+			FXAPI:        getEnv("FX_PRICE_API", "https://open.er-api.com/v6"),
 			CacheTTL:     cacheTTL,
 		},
 		RateLimit: RateLimitConfig{

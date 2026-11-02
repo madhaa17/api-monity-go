@@ -24,7 +24,7 @@ backend/
 │   ├── database/        # DB connection
 │   ├── models/          # Domain entities
 │   └── pkg/response/    # JSON response helpers
-├── migrations/          # SQL migrations (001–007), applied in order
+├── migrations/          # SQL migrations (001–009), applied in order
 ├── Dockerfile
 ├── docker-compose.yml   # Dokploy / Docker Compose
 └── .env.example
@@ -66,6 +66,8 @@ backend/
    | `005_link_cash_asset` | Links incomes/expenses to the CASH asset they move money in/out of (**deletes all existing incomes and expenses**) |
    | `006_debts_and_receivables` | Debts, receivables and their installment payments |
    | `007_categories` | Per-user categories; creates the defaults for existing users and moves `expenses.category` (enum) to `category_id` |
+| `008_market_daily_closes` | Daily closing prices per crypto/stock symbol, filled by the backend every 6 hours (past year each run) |
+| `009_user_password_changed_at` | Records when a user last changed their password, so older tokens can be rejected |
 
    On an existing database, run only the files that have not been applied yet. Back up first before `007`: it drops the old `expenses.category` column after copying it.
 
@@ -88,7 +90,7 @@ backend/
 |-------------|-----------------------------------------|--------|
 | Root        | `GET /` → `{"status":"ok"}`             | —      |
 | Health      | `GET /health` → status + DB             | —      |
-| Auth        | `POST /api/v1/auth/register`, `.../login`, `.../refresh`, `GET .../me`, `POST .../logout` | Bearer (me, logout) |
+| Auth        | `POST /api/v1/auth/register`, `.../login`, `.../refresh`, `GET .../me`, `POST .../logout`, `PUT .../password` | Bearer (me, password) |
 | Activities  | `GET /api/v1/activities?group_by=day&date=YYYY-MM-DD` — incomes, expenses, debts, receivables grouped (day/month/year), optional `date`, `tz` | Bearer |
 | Assets      | CRUD assets (crypto, stock, etc.)       | Bearer |
 | Categories  | `GET/POST /api/v1/categories`, `GET/PUT/DELETE .../categories/{uuid}` — per-user INCOME/EXPENSE categories; delete an in-use category with `?reassign_to=<uuid>` | Bearer |
@@ -163,8 +165,9 @@ Example: `GET /api/v1/portfolio?currency=USD`.
 - **When to refresh:** Call `POST /api/v1/auth/refresh` with body `{ "refresh_token": "<refresh_token>" }` either:
   - **Proactively** before the access token expires (e.g. when you know TTL and refresh a bit earlier), or
   - **On 401** when any protected request returns Unauthorized — then retry the request after storing the new tokens from the refresh response.
-- **Refresh response** has the same shape as login. Replace stored access and refresh with the new values.
-- **Logout:** `POST /api/v1/auth/logout` (optionally with `refresh_token` in body) invalidates the session; discard stored tokens on the client.
+- **Refresh response** has the same shape as login. Replace stored access and refresh with the new values: each refresh rotates the refresh token, and the old one stops working 30 seconds after its first use (the grace period lets tabs that refresh at the same time all succeed).
+- **Logout:** `POST /api/v1/auth/logout` with the access token in `Authorization: Bearer` and/or `refresh_token` in the body revokes both; a revoked refresh token is rejected by `/auth/refresh`. It needs no valid session, so it works after the access token has expired. Discard stored tokens on the client.
+- **Change password:** `PUT /api/v1/auth/password` with body `{ "current_password": "...", "new_password": "..." }`. Every token issued before the change stops working (all other sessions are signed out); store the new token pair from the response, which has the same shape as login. Limited to 5 requests per 15 minutes per client.
 
 ## Security & middleware
 

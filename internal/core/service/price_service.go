@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,6 +64,29 @@ func shared[T any](s *PriceService, ctx context.Context, key string, fn func(ctx
 		return zero, err
 	}
 	return v.(T), nil
+}
+
+const (
+	// priceRevalidateWindow and chartRevalidateWindow are how old a last-known price or chart may
+	// be to be served at once when its cache entry has expired, while it is refreshed in the
+	// background (stale-while-revalidate).
+	priceRevalidateWindow = 10 * time.Minute
+	chartRevalidateWindow = time.Hour
+)
+
+// revalidate runs fn for key in the background, joining a refresh already in flight, so the
+// caller can answer from the last known data without waiting for the upstream API.
+func revalidate[T any](s *PriceService, ctx context.Context, key string, fn func(ctx context.Context) (T, error)) {
+	go func() {
+		if _, err := shared(s, ctx, key, fn); err != nil {
+			slog.Warn("revalidate_failed", "key", key, "error", err)
+		}
+	}()
+}
+
+// recent reports whether data fetched at fetchedAt is within window of now.
+func recent(fetchedAt time.Time, window time.Duration) bool {
+	return !fetchedAt.IsZero() && time.Since(fetchedAt) < window
 }
 
 // yahooTradingPeriod is the regular session Yahoo reports in a chart's meta.currentTradingPeriod.
@@ -219,65 +243,86 @@ func (s *PriceService) GetCryptoPriceWithCurrency(ctx context.Context, symbol st
 	}
 
 	cacheKey := fmt.Sprintf("crypto:%s:%s", symbol, currency)
+	lastKey := "last:" + cacheKey
 	if cached := s.getFromCache(ctx, cacheKey); cached != nil {
 		slog.Debug("cache_hit", "key", cacheKey)
 		return cached, nil
 	}
 	slog.Debug("cache_miss", "key", cacheKey)
 
-	return shared(s, ctx, cacheKey, func(ctx context.Context) (*port.PriceData, error) {
-		// Map ticker to CoinGecko id (e.g. SOL -> solana)
-		coinID, err := s.resolveCoinID(ctx, symbol)
+	refresh := func(ctx context.Context) (*port.PriceData, error) {
+		price, err := s.fetchCryptoPrice(ctx, symbol, currency)
 		if err != nil {
 			return nil, err
 		}
-
-		vsCurrency := strings.ToLower(currency)
-		req, err := s.newCoinGeckoRequest(ctx, fmt.Sprintf("/simple/price?ids=%s&vs_currencies=%s", coinID, vsCurrency))
-		if err != nil {
-			return nil, err
+		s.setCache(ctx, cacheKey, price)
+		s.setCacheTTL(ctx, lastKey, price, lastKnownTTL)
+		return price, nil
+	}
+	if last := s.getFromCache(ctx, lastKey); last != nil && recent(last.FetchedAt, priceRevalidateWindow) {
+		revalidate(s, ctx, cacheKey, refresh)
+		return last, nil
+	}
+	price, err := shared(s, ctx, cacheKey, refresh)
+	if err != nil {
+		if last := s.getFromCache(ctx, lastKey); last != nil {
+			slog.Warn("price_stale_fallback", "symbol", symbol, "fetched_at", last.FetchedAt, "error", err)
+			last.Stale = true
+			return last, nil
 		}
+		return nil, err
+	}
+	return price, nil
+}
 
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			slog.Warn("price_api_error", "symbol", symbol, "source", "coingecko", "error", err)
-			return nil, fmt.Errorf("fetch crypto price: %w", err)
-		}
-		defer resp.Body.Close()
+// fetchCryptoPrice gets the current price of symbol in currency from CoinGecko.
+func (s *PriceService) fetchCryptoPrice(ctx context.Context, symbol, currency string) (*port.PriceData, error) {
+	// Map ticker to CoinGecko id (e.g. SOL -> solana)
+	coinID, err := s.resolveCoinID(ctx, symbol)
+	if err != nil {
+		return nil, err
+	}
 
-		if resp.StatusCode != http.StatusOK {
-			slog.Warn("price_api_error", "symbol", symbol, "source", "coingecko", "status", resp.StatusCode)
-			return nil, fmt.Errorf("coingecko API returned status %d", resp.StatusCode)
-		}
+	vsCurrency := strings.ToLower(currency)
+	req, err := s.newCoinGeckoRequest(ctx, fmt.Sprintf("/simple/price?ids=%s&vs_currencies=%s", coinID, vsCurrency))
+	if err != nil {
+		return nil, err
+	}
 
-		// Response: {"solana":{"usd":86.59}}
-		var result map[string]map[string]float64
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return nil, fmt.Errorf("decode response: %w", err)
-		}
+	body, status, err := s.doWithRetry(req)
+	if err != nil {
+		slog.Warn("price_api_error", "symbol", symbol, "source", "coingecko", "error", err)
+		return nil, fmt.Errorf("fetch crypto price: %w", err)
+	}
+	if status != http.StatusOK {
+		slog.Warn("price_api_error", "symbol", symbol, "source", "coingecko", "status", status)
+		return nil, fmt.Errorf("coingecko API returned status %d", status)
+	}
 
-		coinData, ok := result[coinID]
-		if !ok {
-			return nil, fmt.Errorf("price not found for %s", symbol)
-		}
+	// Response: {"solana":{"usd":86.59}}
+	var result map[string]map[string]float64
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
 
-		price, ok := coinData[vsCurrency]
-		if !ok {
-			return nil, fmt.Errorf("price in %s not found for %s", currency, symbol)
-		}
+	coinData, ok := result[coinID]
+	if !ok {
+		return nil, fmt.Errorf("price not found for %s", symbol)
+	}
 
-		priceData := &port.PriceData{
-			Symbol:    symbol,
-			Price:     price,
-			Currency:  currency,
-			Source:    "coingecko",
-			FetchedAt: time.Now(),
-		}
+	price, ok := coinData[vsCurrency]
+	if !ok {
+		return nil, fmt.Errorf("price in %s not found for %s", currency, symbol)
+	}
 
-		s.setCache(ctx, cacheKey, priceData)
-		slog.Info("price_fetched", "symbol", symbol, "price", price, "source", "coingecko")
-		return priceData, nil
-	})
+	slog.Info("price_fetched", "symbol", symbol, "price", price, "source", "coingecko")
+	return &port.PriceData{
+		Symbol:    symbol,
+		Price:     price,
+		Currency:  currency,
+		Source:    "coingecko",
+		FetchedAt: time.Now(),
+	}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -343,44 +388,76 @@ func yahooSymbolCandidates(symbol string) []string {
 	return []string{symbol + ".JK", symbol}
 }
 
-// yahooRetryDelays are the waits before each retry of a request that failed transiently (network
-// error, 429 or 5xx). Yahoo's free API drops or throttles requests from time to time.
-var yahooRetryDelays = []time.Duration{300 * time.Millisecond, time.Second}
+// retryDelays are the waits before each retry of a request that failed transiently (network
+// error, 429 or 5xx). The free Yahoo and CoinGecko APIs drop or throttle requests from time to time.
+var retryDelays = []time.Duration{300 * time.Millisecond, time.Second}
+
+// maxRetryAfter is the longest Retry-After a request waits out; a longer one ends the retries, so
+// the caller falls back to the last known data instead of hanging.
+const maxRetryAfter = 2 * time.Second
 
 // doWithRetry sends req and returns the body and status, retrying transient failures after each
-// of yahooRetryDelays. A 4xx other than 429 is returned at once.
+// of retryDelays, or after the server's Retry-After when that is longer. A 4xx other than 429 is
+// returned at once.
 func (s *PriceService) doWithRetry(req *http.Request) ([]byte, int, error) {
 	for attempt := 0; ; attempt++ {
-		body, status, err := s.do(req)
+		body, status, retryAfter, err := s.do(req)
 		transient := err != nil || status == http.StatusTooManyRequests || status >= http.StatusInternalServerError
-		if !transient || attempt >= len(yahooRetryDelays) || req.Context().Err() != nil {
+		if !transient || attempt >= len(retryDelays) || retryAfter > maxRetryAfter || req.Context().Err() != nil {
 			return body, status, err
 		}
 		select {
-		case <-time.After(yahooRetryDelays[attempt]):
+		case <-time.After(max(retryDelays[attempt], retryAfter)):
 		case <-req.Context().Done():
 			return nil, 0, req.Context().Err()
 		}
 	}
 }
 
-func (s *PriceService) do(req *http.Request) ([]byte, int, error) {
+// do sends req and returns the body, status and the wait the server asks for in Retry-After.
+func (s *PriceService) do(req *http.Request) ([]byte, int, time.Duration, error) {
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, 0, fmt.Errorf("read response: %w", err)
+		return nil, 0, 0, fmt.Errorf("read response: %w", err)
 	}
-	return body, resp.StatusCode, nil
+	return body, resp.StatusCode, parseRetryAfter(resp.Header.Get("Retry-After"), time.Now()), nil
 }
+
+// parseRetryAfter returns the wait a Retry-After header asks for, given in seconds or as an HTTP
+// date, or 0 when it is absent or invalid.
+func parseRetryAfter(v string, now time.Time) time.Duration {
+	if v == "" {
+		return 0
+	}
+	if secs, err := strconv.Atoi(v); err == nil {
+		return max(time.Duration(secs)*time.Second, 0)
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		return max(t.Sub(now), 0)
+	}
+	return 0
+}
+
+// yahooSymbolTTL is how long the Yahoo symbol a bare ticker resolved to (BUMI -> BUMI.JK) is kept.
+const yahooSymbolTTL = 30 * 24 * time.Hour
 
 // fetchYahooChart calls the Yahoo chart API with query for the first candidate of symbol that
 // Yahoo knows, and returns the body and the Yahoo symbol used. Only a 404 moves on to the next one.
+// The candidate that worked is remembered, so later calls skip the ones that did not.
 func (s *PriceService) fetchYahooChart(ctx context.Context, symbol, query string) ([]byte, string, error) {
 	candidates := yahooSymbolCandidates(symbol)
+	resolvedKey := "yahoosym:" + symbol
+	probing := len(candidates) > 1
+	if probing {
+		if raw, err := s.cache.Get(ctx, resolvedKey); err == nil && len(raw) > 0 {
+			candidates, probing = []string{string(raw)}, false
+		}
+	}
 	for i, yahooSymbol := range candidates {
 		url := fmt.Sprintf("%s/v8/finance/chart/%s?%s", s.cfg.StockAPI, yahooSymbol, query)
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -401,6 +478,9 @@ func (s *PriceService) fetchYahooChart(ctx context.Context, symbol, query string
 		if status != http.StatusOK {
 			slog.Warn("price_api_error", "symbol", yahooSymbol, "source", "yahoo", "status", status)
 			return nil, yahooSymbol, fmt.Errorf("stock API returned status %d for %s", status, yahooSymbol)
+		}
+		if probing {
+			_ = s.cache.Set(ctx, resolvedKey, []byte(yahooSymbol), yahooSymbolTTL)
 		}
 		return body, yahooSymbol, nil
 	}
@@ -425,22 +505,30 @@ func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol str
 	lastKey := "last:" + cacheKey
 	if cached := s.getFromCache(ctx, cacheKey); cached != nil {
 		slog.Debug("cache_hit", "key", cacheKey)
-		return cached, nil
+		return s.preferConverted(ctx, lastKey, currency, cached), nil
 	}
 	slog.Debug("cache_miss", "key", cacheKey)
 
-	price, err := shared(s, ctx, cacheKey, func(ctx context.Context) (*port.PriceData, error) {
+	refresh := func(ctx context.Context) (*port.PriceData, error) {
 		price, period, err := s.fetchStockPrice(ctx, symbol, currency)
 		if err != nil {
 			return nil, err
 		}
-		// A price left in the source currency (exchange rate unavailable) is not cached.
-		if price.Currency == currency {
-			s.setCacheTTL(ctx, cacheKey, price, marketAwareTTL(time.Now(), period, s.priceTTL()))
-			s.setCacheTTL(ctx, lastKey, price, lastKnownTTL)
+		if price.Currency != currency {
+			// Exchange rate unavailable: keep the unconverted price only briefly, so Yahoo is not
+			// called on every request while the conversion is retried soon.
+			s.setCacheTTL(ctx, cacheKey, price, s.priceTTL())
+			return price, nil
 		}
+		s.setCacheTTL(ctx, cacheKey, price, marketAwareTTL(time.Now(), period, s.priceTTL()))
+		s.setCacheTTL(ctx, lastKey, price, lastKnownTTL)
 		return price, nil
-	})
+	}
+	if last := s.getFromCache(ctx, lastKey); last != nil && recent(last.FetchedAt, priceRevalidateWindow) {
+		revalidate(s, ctx, cacheKey, refresh)
+		return last, nil
+	}
+	price, err := shared(s, ctx, cacheKey, refresh)
 	if err != nil {
 		if last := s.getFromCache(ctx, lastKey); last != nil {
 			slog.Warn("price_stale_fallback", "symbol", symbol, "fetched_at", last.FetchedAt, "error", err)
@@ -449,7 +537,21 @@ func (s *PriceService) GetStockPriceWithCurrency(ctx context.Context, symbol str
 		}
 		return nil, err
 	}
-	return price, nil
+	return s.preferConverted(ctx, lastKey, currency, price), nil
+}
+
+// preferConverted returns price, or, when it is still in its source currency because the exchange
+// rate was unavailable, the last price fetched in currency marked Stale, if there is one.
+func (s *PriceService) preferConverted(ctx context.Context, lastKey, currency string, price *port.PriceData) *port.PriceData {
+	if price.Currency == currency {
+		return price
+	}
+	if last := s.getFromCache(ctx, lastKey); last != nil {
+		slog.Warn("price_stale_fallback", "symbol", price.Symbol, "fetched_at", last.FetchedAt, "error", "exchange rate unavailable")
+		last.Stale = true
+		return last
+	}
+	return price
 }
 
 // fetchStockPrice gets the current price of symbol from Yahoo, converted to currency when possible,
@@ -650,125 +752,14 @@ func (s *PriceService) fallbackExchangeRate(ctx context.Context, fromCurrency, t
 }
 
 // ---------------------------------------------------------------------------
-// Historical — CoinGecko (simplified, no CMC key needed)
-// ---------------------------------------------------------------------------
-
-func (s *PriceService) GetHistoricalCryptoPrice(ctx context.Context, symbol string, timestamp time.Time) (*port.PriceData, error) {
-	symbol = strings.ToUpper(symbol)
-
-	coinID, err := s.resolveCoinID(ctx, symbol)
-	if err != nil {
-		return nil, err
-	}
-
-	// CoinGecko history endpoint: /coins/{id}/history?date=dd-mm-yyyy
-	dateStr := timestamp.UTC().Format("02-01-2006")
-	req, err := s.newCoinGeckoRequest(ctx, fmt.Sprintf("/coins/%s/history?date=%s&localization=false", coinID, dateStr))
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch historical crypto price: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("coingecko history API returned status %d", resp.StatusCode)
-	}
-
-	var result struct {
-		MarketData struct {
-			CurrentPrice map[string]float64 `json:"current_price"`
-		} `json:"market_data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	price, ok := result.MarketData.CurrentPrice["idr"]
-	if !ok {
-		return nil, fmt.Errorf("historical price not found for %s at %s", symbol, dateStr)
-	}
-
-	return &port.PriceData{
-		Symbol:    symbol,
-		Price:     price,
-		Currency:  port.DefaultCurrency,
-		Source:    "coingecko",
-		FetchedAt: timestamp,
-	}, nil
-}
-
-func (s *PriceService) GetHistoricalCryptoOHLCV(ctx context.Context, symbol string, timeStart, timeEnd time.Time, interval string) ([]port.OHLCVData, error) {
-	symbol = strings.ToUpper(symbol)
-
-	coinID, err := s.resolveCoinID(ctx, symbol)
-	if err != nil {
-		return nil, err
-	}
-
-	// CoinGecko OHLC endpoint: /coins/{id}/ohlc?vs_currency=usd&days=30
-	days := int(timeEnd.Sub(timeStart).Hours()/24) + 1
-	if days < 1 {
-		days = 1
-	}
-	if days > 365 {
-		days = 365
-	}
-
-	req, err := s.newCoinGeckoRequest(ctx, fmt.Sprintf("/coins/%s/ohlc?vs_currency=idr&days=%d", coinID, days))
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch historical OHLCV: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("coingecko OHLC API returned status %d", resp.StatusCode)
-	}
-
-	// Response: [[timestamp, open, high, low, close], ...]
-	var rawData [][]float64
-	if err := json.NewDecoder(resp.Body).Decode(&rawData); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	ohlcvData := make([]port.OHLCVData, 0, len(rawData))
-	for _, candle := range rawData {
-		if len(candle) < 5 {
-			continue
-		}
-		ts := time.UnixMilli(int64(candle[0]))
-		ohlcvData = append(ohlcvData, port.OHLCVData{
-			Symbol:    symbol,
-			TimeOpen:  ts,
-			TimeClose: ts,
-			Open:      candle[1],
-			High:      candle[2],
-			Low:       candle[3],
-			Close:     candle[4],
-			Volume:    0, // CoinGecko OHLC doesn't include volume
-			Currency:  port.DefaultCurrency,
-			Source:    "coingecko",
-		})
-	}
-
-	return ohlcvData, nil
-}
-
-// ---------------------------------------------------------------------------
 // Crypto chart — CoinGecko market_chart
 // ---------------------------------------------------------------------------
 
 const (
 	chartCacheTTL = 15 * time.Minute
+	// intradayChartTTL is how long an intraday (minute or hour bars) stock chart is cached while
+	// its market is open.
+	intradayChartTTL = 2 * time.Minute
 	// maxChartPoints caps a chart's size; daily data for 1Y (~250 trading days) fits untouched.
 	maxChartPoints = 500
 	// lastKnownTTL is how long the last successfully fetched stock price and chart stay available
@@ -776,6 +767,8 @@ const (
 	lastKnownTTL = 30 * 24 * time.Hour
 )
 
+// GetCryptoChart returns a coin's price history from the cache or CoinGecko. When CoinGecko cannot
+// be reached, it returns the last chart fetched in the past lastKnownTTL, marked Stale.
 func (s *PriceService) GetCryptoChart(ctx context.Context, symbol string, currency string, days int) (*port.ChartResponse, error) {
 	symbol = strings.ToUpper(symbol)
 	currency = strings.ToUpper(currency)
@@ -784,53 +777,76 @@ func (s *PriceService) GetCryptoChart(ctx context.Context, symbol string, curren
 	}
 
 	cacheKey := fmt.Sprintf("chart:crypto:%s:%s:%d", symbol, currency, days)
+	lastKey := "last:" + cacheKey
 	if cached := s.getChartFromCache(ctx, cacheKey); cached != nil {
 		slog.Debug("cache_hit", "key", cacheKey)
 		return cached, nil
 	}
 
-	return shared(s, ctx, cacheKey, func(ctx context.Context) (*port.ChartResponse, error) {
-		coinID, err := s.resolveCoinID(ctx, symbol)
+	refresh := func(ctx context.Context) (*port.ChartResponse, error) {
+		chart, err := s.fetchCryptoChart(ctx, symbol, currency, days)
 		if err != nil {
 			return nil, err
 		}
+		s.setChartCache(ctx, cacheKey, chart, cryptoChartTTL(days))
+		s.setChartCache(ctx, lastKey, chart, lastKnownTTL)
+		return chart, nil
+	}
+	if last := s.getChartFromCache(ctx, lastKey); last != nil && recent(last.FetchedAt, chartRevalidateWindow) {
+		revalidate(s, ctx, cacheKey, refresh)
+		return last, nil
+	}
+	chart, err := shared(s, ctx, cacheKey, refresh)
+	if err != nil {
+		if last := s.getChartFromCache(ctx, lastKey); last != nil {
+			slog.Warn("chart_stale_fallback", "symbol", symbol, "error", err)
+			last.Stale = true
+			return last, nil
+		}
+		return nil, err
+	}
+	return chart, nil
+}
 
-		vsCurrency := strings.ToLower(currency)
-		req, err := s.newCoinGeckoRequest(ctx, fmt.Sprintf("/coins/%s/market_chart?vs_currency=%s&days=%d", coinID, vsCurrency, days))
-		if err != nil {
-			return nil, err
-		}
+func (s *PriceService) fetchCryptoChart(ctx context.Context, symbol, currency string, days int) (*port.ChartResponse, error) {
+	coinID, err := s.resolveCoinID(ctx, symbol)
+	if err != nil {
+		return nil, err
+	}
 
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("fetch crypto chart: %w", err)
-		}
-		defer resp.Body.Close()
+	vsCurrency := strings.ToLower(currency)
+	req, err := s.newCoinGeckoRequest(ctx, fmt.Sprintf("/coins/%s/market_chart?vs_currency=%s&days=%d", coinID, vsCurrency, days))
+	if err != nil {
+		return nil, err
+	}
 
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("coingecko market_chart API returned status %d", resp.StatusCode)
-		}
+	body, status, err := s.doWithRetry(req)
+	if err != nil {
+		slog.Warn("price_api_error", "symbol", symbol, "source", "coingecko", "error", err)
+		return nil, fmt.Errorf("fetch crypto chart: %w", err)
+	}
+	if status != http.StatusOK {
+		slog.Warn("price_api_error", "symbol", symbol, "source", "coingecko", "status", status)
+		return nil, fmt.Errorf("coingecko market_chart API returned status %d", status)
+	}
 
-		var result struct {
-			Prices [][]float64 `json:"prices"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return nil, fmt.Errorf("decode chart response: %w", err)
-		}
+	var result struct {
+		Prices [][]float64 `json:"prices"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("decode chart response: %w", err)
+	}
 
-		data := make([]port.ChartDataPoint, 0, len(result.Prices))
-		for _, pair := range result.Prices {
-			if len(pair) < 2 {
-				continue
-			}
-			ms := int64(pair[0])
-			data = append(data, port.ChartDataPoint{T: ms / 1000, P: pair[1]})
+	data := make([]port.ChartDataPoint, 0, len(result.Prices))
+	for _, pair := range result.Prices {
+		if len(pair) < 2 {
+			continue
 		}
-		data = downsampleChartData(data, maxChartPoints)
-		out := &port.ChartResponse{Symbol: symbol, Currency: currency, Data: data}
-		s.setChartCache(ctx, cacheKey, out, cryptoChartTTL(days))
-		return out, nil
-	})
+		ms := int64(pair[0])
+		data = append(data, port.ChartDataPoint{T: ms / 1000, P: pair[1]})
+	}
+	data = downsampleChartData(data, maxChartPoints)
+	return &port.ChartResponse{Symbol: symbol, Currency: currency, Data: data, FetchedAt: time.Now()}, nil
 }
 
 // cryptoChartTTL is how long a crypto chart of the given days is cached. Crypto trades around the
@@ -913,15 +929,24 @@ func (s *PriceService) getStockChart(ctx context.Context, symbol string, rangePa
 		return cached, nil
 	}
 
-	chart, err := shared(s, ctx, cacheKey, func(ctx context.Context) (*port.ChartResponse, error) {
+	refresh := func(ctx context.Context) (*port.ChartResponse, error) {
 		chart, period, err := s.fetchStockChart(ctx, symbol, rangeParam, interval)
 		if err != nil {
 			return nil, err
 		}
-		s.setChartCache(ctx, cacheKey, chart, marketAwareTTL(time.Now(), period, chartCacheTTL))
+		openTTL := chartCacheTTL
+		if isIntradayInterval(interval) {
+			openTTL = intradayChartTTL
+		}
+		s.setChartCache(ctx, cacheKey, chart, marketAwareTTL(time.Now(), period, openTTL))
 		s.setChartCache(ctx, lastKey, chart, lastKnownTTL)
 		return chart, nil
-	})
+	}
+	if last := s.getChartFromCache(ctx, lastKey); last != nil && recent(last.FetchedAt, chartRevalidateWindow) {
+		revalidate(s, ctx, cacheKey, refresh)
+		return last, nil
+	}
+	chart, err := shared(s, ctx, cacheKey, refresh)
 	if err != nil {
 		if last := s.getChartFromCache(ctx, lastKey); last != nil {
 			slog.Warn("chart_stale_fallback", "symbol", symbol, "error", err)
@@ -931,6 +956,11 @@ func (s *PriceService) getStockChart(ctx context.Context, symbol string, rangePa
 		return nil, err
 	}
 	return chart, nil
+}
+
+// isIntradayInterval reports whether a Yahoo interval is minutes or hours (5m, 1h), not days or more.
+func isIntradayInterval(interval string) bool {
+	return strings.HasSuffix(interval, "m") && !strings.HasSuffix(interval, "mo") || strings.HasSuffix(interval, "h")
 }
 
 func (s *PriceService) fetchStockChart(ctx context.Context, symbol string, rangeParam string, interval string) (*port.ChartResponse, yahooTradingPeriod, error) {
@@ -946,6 +976,7 @@ func (s *PriceService) fetchStockChart(ctx context.Context, symbol string, range
 				Meta struct {
 					Currency             string             `json:"currency"`
 					CurrentTradingPeriod yahooTradingPeriod `json:"currentTradingPeriod"`
+					ChartPreviousClose   float64            `json:"chartPreviousClose"`
 				} `json:"meta"`
 				Timestamp  []int64 `json:"timestamp"`
 				Indicators struct {
@@ -1003,7 +1034,13 @@ func (s *PriceService) fetchStockChart(ctx context.Context, symbol string, range
 		return nil, period, fmt.Errorf("no chart data found for %s", yahooSymbol)
 	}
 	data = downsampleChartData(data, maxChartPoints)
-	return &port.ChartResponse{Symbol: symbol, Currency: currency, Data: data}, period, nil
+	out := &port.ChartResponse{Symbol: symbol, Currency: currency, Data: data, FetchedAt: time.Now()}
+	// Yahoo's chartPreviousClose is the close before the range starts; only for 1d is that the
+	// previous session's close, the baseline of the day's change.
+	if rangeParam == "1d" {
+		out.PreviousClose = r.Meta.ChartPreviousClose
+	}
+	return out, period, nil
 }
 
 // ---------------------------------------------------------------------------

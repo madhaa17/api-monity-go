@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,15 +41,7 @@ func (h *AssetPriceHistoryHandler) RecordPrice(w http.ResponseWriter, r *http.Re
 
 	history, err := h.svc.RecordPrice(r.Context(), userID, assetUUID, req)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			response.ErrorWithLog(w, r, http.StatusNotFound, "asset not found", nil)
-			return
-		}
-		if strings.Contains(err.Error(), "positive") || strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "must be") {
-			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
-			return
-		}
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to record price", err.Error())
+		writeServiceError(w, r, err, "asset not found", "failed to record price")
 		return
 	}
 
@@ -78,11 +71,7 @@ func (h *AssetPriceHistoryHandler) GetPriceHistory(w http.ResponseWriter, r *htt
 
 	histories, err := h.svc.GetPriceHistory(r.Context(), userID, assetUUID, limit)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			response.ErrorWithLog(w, r, http.StatusNotFound, "asset not found", nil)
-			return
-		}
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to get price history", err.Error())
+		writeServiceError(w, r, err, "asset not found", "failed to get price history")
 		return
 	}
 
@@ -104,19 +93,15 @@ func (h *AssetPriceHistoryHandler) FetchAndRecordPrice(w http.ResponseWriter, r 
 
 	history, err := h.svc.FetchAndRecordPrice(r.Context(), userID, assetUUID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			response.ErrorWithLog(w, r, http.StatusNotFound, "asset not found", nil)
-			return
+		switch {
+		case errors.Is(err, port.ErrPriceUnavailable):
+			response.ErrorWithLog(w, r, http.StatusServiceUnavailable, "current price unavailable, nothing recorded", err.Error())
+		// The price sources report an unknown symbol only in their error text.
+		case strings.Contains(err.Error(), "unsupported crypto symbol") || strings.Contains(err.Error(), "status 404"):
+			response.ErrorWithLog(w, r, http.StatusBadRequest, "symbol not found at the price source", err.Error())
+		default:
+			writeServiceError(w, r, err, "asset not found", "failed to fetch and record price")
 		}
-		if strings.Contains(err.Error(), "no symbol") {
-			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
-			return
-		}
-		if strings.Contains(err.Error(), "unsupported") {
-			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
-			return
-		}
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to fetch and record price", err.Error())
 		return
 	}
 

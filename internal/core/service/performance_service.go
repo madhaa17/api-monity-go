@@ -168,6 +168,8 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 	var performers []port.PerformerSummary
 	statusSummary := port.StatusSummary{}
 
+	prices := fetchMarketPrices(ctx, s.priceService, assets, currency)
+
 	// Process each asset
 	for _, asset := range assets {
 		// Count by status
@@ -187,17 +189,14 @@ func (s *PerformanceService) GetPortfolioPerformance(ctx context.Context, userID
 
 		// Calculate current value
 		currentPrice := asset.PurchasePrice
-		var priceData *port.PriceData
-		if asset.Symbol != nil && *asset.Symbol != "" {
-			switch asset.Type {
-			case models.AssetTypeCrypto:
-				priceData, _ = s.priceService.GetCryptoPriceWithCurrency(ctx, *asset.Symbol, currency)
-			case models.AssetTypeStock:
-				priceData, _ = s.priceService.GetStockPriceWithCurrency(ctx, *asset.Symbol, currency)
-			}
-			if priceData != nil {
-				currentPrice = decimal.NewFromFloat(priceData.Price)
-			}
+		priceData, _ := prices.get(&asset)
+		// A price left in its source currency (exchange rate unavailable) cannot be added up in
+		// currency, so the purchase price is used as for an unavailable price.
+		if priceData != nil && priceData.Currency != currency {
+			priceData = nil
+		}
+		if priceData != nil {
+			currentPrice = decimal.NewFromFloat(priceData.Price)
 		}
 
 		effectiveQty := effectiveQuantity(&asset, priceData)

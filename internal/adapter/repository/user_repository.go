@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"monity/internal/core/port"
 	"monity/internal/models"
@@ -54,4 +55,19 @@ func (r *UserRepo) GetByID(ctx context.Context, id int64) (*models.User, error) 
 		return nil, fmt.Errorf("get user by id: %w", result.Error)
 	}
 	return &user, nil
+}
+
+func (r *UserRepo) UpdatePassword(ctx context.Context, id int64, passwordHash string, changedAt time.Time) error {
+	result := conn(ctx, r.db).Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"password":            passwordHash,
+		"password_changed_at": changedAt,
+		"updated_at":          changedAt,
+	})
+	if result.Error != nil {
+		return fmt.Errorf("update user password: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return port.ErrNotFound
+	}
+	return nil
 }

@@ -15,7 +15,12 @@ var (
 		"1d": true, "5d": true, "1mo": true, "3mo": true, "6mo": true,
 		"1y": true, "2y": true, "5y": true, "10y": true, "ytd": true, "max": true,
 	}
-	stockChartIntervalAllowed = map[string]bool{"1d": true, "1wk": true, "1mo": true}
+	stockChartIntervalAllowed = map[string]bool{
+		"5m": true, "15m": true, "30m": true, "1h": true, "1d": true, "1wk": true, "1mo": true,
+	}
+	// stockIntradayIntervals are the intervals only allowed for the stockIntradayRanges.
+	stockIntradayIntervals = map[string]bool{"5m": true, "15m": true, "30m": true, "1h": true}
+	stockIntradayRanges    = map[string]bool{"1d": true, "5d": true}
 )
 
 type PriceHandler struct {
@@ -157,7 +162,11 @@ func (h *PriceHandler) GetStockChart(w http.ResponseWriter, r *http.Request) {
 		interval = "1d"
 	}
 	if !stockChartIntervalAllowed[interval] {
-		response.ErrorWithLog(w, r, http.StatusBadRequest, "interval must be one of: 1d, 1wk, 1mo", nil)
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "interval must be one of: 5m, 15m, 30m, 1h, 1d, 1wk, 1mo", nil)
+		return
+	}
+	if stockIntradayIntervals[interval] && !stockIntradayRanges[rangeParam] {
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "intraday intervals (5m, 15m, 30m, 1h) need range 1d or 5d", nil)
 		return
 	}
 

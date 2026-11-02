@@ -10,6 +10,7 @@ import (
 	"monity/internal/adapter/repository"
 	"monity/internal/app/routes"
 	"monity/internal/config"
+	"monity/internal/core/port"
 	"monity/internal/core/service"
 	"monity/internal/pkg/cache"
 
@@ -20,6 +21,11 @@ type App struct {
 	cfg *config.Config
 	db  *gorm.DB
 	srv *http.Server
+
+	dailyCloses port.DailyCloseService
+	// jobsCtx is cancelled by Shutdown to stop the background jobs.
+	jobsCtx    context.Context
+	cancelJobs context.CancelFunc
 }
 
 func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *App {
@@ -38,6 +44,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 	assetPriceHistoryRepo := repository.NewAssetPriceHistoryRepository(db)
 	insightRepo := repository.NewInsightRepository(db)
 	categoryRepo := repository.NewCategoryRepository(db)
+	marketDailyCloseRepo := repository.NewMarketDailyCloseRepository(db)
 	transactor := repository.NewTransactor(db)
 
 	authSvc := service.NewAuthService(userRepo, categoryRepo, transactor, cfg, c)
@@ -54,6 +61,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 	insightSvc := service.NewInsightService(insightRepo)
 	portfolioSvc := service.NewPortfolioService(assetRepo, priceSvc, assetPriceHistoryRepo)
 	performanceSvc := service.NewPerformanceService(assetRepo, priceSvc)
+	dailyCloseSvc := service.NewDailyCloseService(marketDailyCloseRepo, priceSvc)
 
 	authMiddleware := middleware.NewAuthMiddleware(cfg, c)
 
@@ -113,6 +121,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 		),
 	)
 
+	jobsCtx, cancelJobs := context.WithCancel(context.WithoutCancel(ctx))
 	app := &App{
 		cfg: cfg,
 		db:  db,
@@ -120,6 +129,9 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 			Addr:    ":" + cfg.App.Port,
 			Handler: chain,
 		},
+		dailyCloses: dailyCloseSvc,
+		jobsCtx:     jobsCtx,
+		cancelJobs:  cancelJobs,
 	}
 
 	return app
@@ -127,10 +139,12 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 
 func (a *App) Run() error {
 	slog.Info("server listening", "port", a.cfg.App.Port, "env", a.cfg.App.Env)
+	go a.dailyCloses.Run(a.jobsCtx)
 	return a.srv.ListenAndServe()
 }
 
 func (a *App) Shutdown(ctx context.Context) error {
+	a.cancelJobs()
 	if a.srv != nil {
 		return a.srv.Shutdown(ctx)
 	}

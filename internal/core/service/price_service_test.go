@@ -100,6 +100,14 @@ func TestStockPrice_FallsBackToBareSymbol(t *testing.T) {
 	if got := requested(); !reflect.DeepEqual(got, []string{"AAPL.JK", "AAPL"}) {
 		t.Errorf("requested %v, want AAPL.JK then AAPL", got)
 	}
+
+	// The resolved symbol is remembered: the chart goes straight to AAPL.
+	if _, err := svc.GetStockChart(context.Background(), "AAPL", "1mo", "1d"); err != nil {
+		t.Fatalf("GetStockChart: %v", err)
+	}
+	if got := requested(); !reflect.DeepEqual(got, []string{"AAPL.JK", "AAPL", "AAPL"}) {
+		t.Errorf("requested %v, want no second AAPL.JK probe", got)
+	}
 }
 
 func TestStockChart_UnknownSymbolReturnsError(t *testing.T) {
@@ -172,9 +180,9 @@ func flakyYahoo(t *testing.T, failures int, status int) (*httptest.Server, func(
 
 func noRetryDelay(t *testing.T) {
 	t.Helper()
-	saved := yahooRetryDelays
-	yahooRetryDelays = []time.Duration{0, 0}
-	t.Cleanup(func() { yahooRetryDelays = saved })
+	saved := retryDelays
+	retryDelays = []time.Duration{0, 0}
+	t.Cleanup(func() { retryDelays = saved })
 }
 
 func TestStockPrice_RetriesTransientFailures(t *testing.T) {
@@ -474,5 +482,296 @@ func TestStockChart_ConcurrentMissesShareOneFetch(t *testing.T) {
 	wg.Wait()
 	if calls != 1 {
 		t.Errorf("Yahoo requested %d times, want 1", calls)
+	}
+}
+
+// usdYahooWithoutFX serves AAPL in USD and fails every exchange rate request, as does the FX API.
+func usdYahooWithoutFX(t *testing.T) *PriceService {
+	t.Helper()
+	noRetryDelay(t)
+	yahoo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/AAPL") {
+			fmt.Fprint(w, `{"chart":{"result":[{"meta":{"currency":"USD","regularMarketPrice":180}}],"error":null}}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(yahoo.Close)
+	fx := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(fx.Close)
+	return NewPriceService(&config.PriceAPIConfig{StockAPI: yahoo.URL, FXAPI: fx.URL}, cache.NewMemoryCache()).(*PriceService)
+}
+
+func TestStockPrice_NoExchangeRateKeepsSourceCurrency(t *testing.T) {
+	svc := usdYahooWithoutFX(t)
+
+	for i := 0; i < 2; i++ { // the second call is served from the cache
+		price, err := svc.GetStockPriceWithCurrency(context.Background(), "AAPL", "IDR")
+		if err != nil {
+			t.Fatalf("GetStockPriceWithCurrency: %v", err)
+		}
+		if price.Price != 180 || price.Currency != "USD" {
+			t.Errorf("call %d: price = %v %s, want 180 USD (never labeled IDR)", i, price.Price, price.Currency)
+		}
+	}
+}
+
+func TestStockPrice_NoExchangeRateUsesLastConvertedPrice(t *testing.T) {
+	svc := usdYahooWithoutFX(t)
+	asOf := time.Date(2026, 10, 24, 9, 0, 0, 0, time.UTC)
+	last, _ := json.Marshal(port.PriceData{Symbol: "AAPL", Price: 2_900_000, Currency: "IDR", Source: "yahoo", FetchedAt: asOf})
+	_ = svc.cache.Set(context.Background(), "last:stock:v2:AAPL:IDR", last, time.Hour)
+
+	for i := 0; i < 2; i++ {
+		price, err := svc.GetStockPriceWithCurrency(context.Background(), "AAPL", "IDR")
+		if err != nil {
+			t.Fatalf("GetStockPriceWithCurrency: %v", err)
+		}
+		if price.Price != 2_900_000 || price.Currency != "IDR" || !price.Stale {
+			t.Errorf("call %d: price = %+v, want the stale last-known IDR price", i, price)
+		}
+	}
+}
+
+// flakyCoinGecko fails the first failures requests with status (sending retryAfter as Retry-After
+// when set) and then serves BTC at 100 and a two-point chart, counting the calls.
+func flakyCoinGecko(t *testing.T, failures, status int, retryAfter string) (*httptest.Server, func() int) {
+	t.Helper()
+	var mu sync.Mutex
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		calls++
+		n := calls
+		mu.Unlock()
+		if n <= failures {
+			if retryAfter != "" {
+				w.Header().Set("Retry-After", retryAfter)
+			}
+			w.WriteHeader(status)
+			return
+		}
+		switch r.URL.Path {
+		case "/simple/price":
+			fmt.Fprint(w, `{"bitcoin":{"idr":100}}`)
+		case "/coins/bitcoin/market_chart":
+			fmt.Fprint(w, `{"prices":[[1000,90],[2000,100]]}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return calls
+	}
+}
+
+func TestCryptoPriceAndChart_RetryTransientFailures(t *testing.T) {
+	noRetryDelay(t)
+	srv, calls := flakyCoinGecko(t, 2, http.StatusTooManyRequests, "")
+	svc := NewPriceService(&config.PriceAPIConfig{CryptoAPI: srv.URL}, nil)
+
+	price, err := svc.GetCryptoPriceWithCurrency(context.Background(), "BTC", "IDR")
+	if err != nil {
+		t.Fatalf("GetCryptoPriceWithCurrency: %v", err)
+	}
+	if price.Price != 100 || price.Stale || calls() != 3 {
+		t.Errorf("price = %+v after %d calls, want a fresh 100 after 3", price, calls())
+	}
+
+	chart, err := svc.GetCryptoChart(context.Background(), "BTC", "IDR", 7)
+	if err != nil {
+		t.Fatalf("GetCryptoChart: %v", err)
+	}
+	if len(chart.Data) != 2 || chart.Stale {
+		t.Errorf("chart = %+v, want the fresh two-point chart", chart)
+	}
+}
+
+func TestCryptoPriceAndChart_LastKnownWhenCoinGeckoDown(t *testing.T) {
+	noRetryDelay(t)
+	c := cache.NewMemoryCache()
+	asOf := time.Date(2026, 10, 24, 9, 0, 0, 0, time.UTC)
+	lastPrice, _ := json.Marshal(port.PriceData{Symbol: "BTC", Price: 95, Currency: "IDR", Source: "coingecko", FetchedAt: asOf})
+	lastChart, _ := json.Marshal(port.ChartResponse{Symbol: "BTC", Currency: "IDR", Data: []port.ChartDataPoint{{T: 1, P: 95}}})
+	_ = c.Set(context.Background(), "last:crypto:BTC:IDR", lastPrice, time.Hour)
+	_ = c.Set(context.Background(), "last:chart:crypto:BTC:IDR:7", lastChart, time.Hour)
+
+	srv, _ := flakyCoinGecko(t, 1000, http.StatusServiceUnavailable, "")
+	svc := NewPriceService(&config.PriceAPIConfig{CryptoAPI: srv.URL}, c)
+
+	price, err := svc.GetCryptoPriceWithCurrency(context.Background(), "BTC", "IDR")
+	if err != nil {
+		t.Fatalf("GetCryptoPriceWithCurrency: %v", err)
+	}
+	if price.Price != 95 || !price.Stale || !price.FetchedAt.Equal(asOf) {
+		t.Errorf("price = %+v, want the stale last-known 95 from %s", price, asOf)
+	}
+
+	chart, err := svc.GetCryptoChart(context.Background(), "BTC", "IDR", 7)
+	if err != nil {
+		t.Fatalf("GetCryptoChart: %v", err)
+	}
+	if !chart.Stale || len(chart.Data) != 1 {
+		t.Errorf("chart = %+v, want the stale last-known chart", chart)
+	}
+}
+
+func TestCryptoPrice_SuccessIsKeptAsLastKnown(t *testing.T) {
+	srv, _ := flakyCoinGecko(t, 0, 0, "")
+	c := cache.NewMemoryCache()
+	svc := NewPriceService(&config.PriceAPIConfig{CryptoAPI: srv.URL}, c)
+
+	if _, err := svc.GetCryptoPriceWithCurrency(context.Background(), "BTC", "IDR"); err != nil {
+		t.Fatalf("GetCryptoPriceWithCurrency: %v", err)
+	}
+	raw, err := c.Get(context.Background(), "last:crypto:BTC:IDR")
+	if err != nil || !strings.Contains(string(raw), `"price":100`) {
+		t.Errorf("last-known entry = %s (err %v), want the fetched price", raw, err)
+	}
+}
+
+func TestDoWithRetry_LongRetryAfterStopsRetrying(t *testing.T) {
+	noRetryDelay(t)
+	srv, calls := flakyCoinGecko(t, 1000, http.StatusTooManyRequests, "60")
+	svc := NewPriceService(&config.PriceAPIConfig{CryptoAPI: srv.URL}, nil)
+
+	if _, err := svc.GetCryptoPriceWithCurrency(context.Background(), "BTC", "IDR"); err == nil {
+		t.Fatal("want an error for a 429")
+	}
+	if calls() != 1 {
+		t.Errorf("calls = %d, want 1 (a 60s Retry-After is not waited out)", calls())
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	now := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		v    string
+		want time.Duration
+	}{
+		{"", 0},
+		{"2", 2 * time.Second},
+		{"-5", 0},
+		{"soon", 0},
+		{now.Add(90 * time.Second).Format(http.TimeFormat), 90 * time.Second},
+		{now.Add(-time.Minute).Format(http.TimeFormat), 0},
+	}
+	for _, tt := range tests {
+		if got := parseRetryAfter(tt.v, now); got != tt.want {
+			t.Errorf("parseRetryAfter(%q) = %v, want %v", tt.v, got, tt.want)
+		}
+	}
+}
+
+func TestIsIntradayInterval(t *testing.T) {
+	for interval, want := range map[string]bool{
+		"5m": true, "15m": true, "30m": true, "1h": true, "1d": false, "1wk": false, "1mo": false, "3mo": false,
+	} {
+		if got := isIntradayInterval(interval); got != want {
+			t.Errorf("isIntradayInterval(%q) = %v, want %v", interval, got, want)
+		}
+	}
+}
+
+func TestStockChart_IntradayHasPreviousClose(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		fmt.Fprint(w, `{"chart":{"result":[{"meta":{"currency":"IDR","chartPreviousClose":4940},`+
+			`"timestamp":[1,2],"indicators":{"quote":[{"close":[4950,4980]}]}}],"error":null}}`)
+	}))
+	t.Cleanup(srv.Close)
+	svc := NewPriceService(&config.PriceAPIConfig{StockAPI: srv.URL}, nil)
+
+	chart, err := svc.GetStockChart(context.Background(), "BBCA.JK", "1d", "5m")
+	if err != nil {
+		t.Fatalf("GetStockChart: %v", err)
+	}
+	if gotQuery != "range=1d&interval=5m" {
+		t.Errorf("query = %q, want range=1d&interval=5m (not cut from the daily chart)", gotQuery)
+	}
+	if chart.PreviousClose != 4940 || len(chart.Data) != 2 {
+		t.Errorf("chart = %+v, want two points with previous close 4940", chart)
+	}
+
+	// Other ranges carry no previous close: Yahoo's is the close before the range, not the day.
+	chart, err = svc.GetStockChart(context.Background(), "BBCA.JK", "5d", "15m")
+	if err != nil {
+		t.Fatalf("GetStockChart: %v", err)
+	}
+	if chart.PreviousClose != 0 {
+		t.Errorf("5d previous close = %v, want 0", chart.PreviousClose)
+	}
+}
+
+// waitForCache polls c until key holds a value containing want, or fails after a second.
+func waitForCache(t *testing.T, c cache.Cache, key, want string) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		raw, err := c.Get(context.Background(), key)
+		if err == nil && strings.Contains(string(raw), want) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("cache %s = %s (err %v), want it to contain %s", key, raw, err, want)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestStockPriceAndChart_ServeRecentLastKnownWhileRevalidating(t *testing.T) {
+	c := cache.NewMemoryCache()
+	fetched := time.Now().Add(-2 * time.Minute)
+	lastPrice, _ := json.Marshal(port.PriceData{Symbol: "BUMI", Price: 150, Currency: "IDR", Source: "yahoo", FetchedAt: fetched})
+	lastChart, _ := json.Marshal(port.ChartResponse{Symbol: "BUMI", Currency: "IDR", Data: []port.ChartDataPoint{{T: 1, P: 150}}, FetchedAt: fetched})
+	_ = c.Set(context.Background(), "last:stock:v2:BUMI:IDR", lastPrice, time.Hour)
+	_ = c.Set(context.Background(), "last:chart:stock:BUMI:1y:1d", lastChart, time.Hour)
+	srv, _ := fakeYahoo(t, "BUMI.JK")
+	svc := NewPriceService(&config.PriceAPIConfig{StockAPI: srv.URL}, c)
+
+	price, err := svc.GetStockPriceWithCurrency(context.Background(), "BUMI", "IDR")
+	if err != nil {
+		t.Fatalf("GetStockPriceWithCurrency: %v", err)
+	}
+	if price.Price != 150 || price.Stale {
+		t.Errorf("price = %+v, want the recent last-known 150, not marked stale", price)
+	}
+	waitForCache(t, c, "stock:v2:BUMI:IDR", `"price":140`)
+
+	chart, err := svc.GetStockChart(context.Background(), "BUMI", "1mo", "1d")
+	if err != nil {
+		t.Fatalf("GetStockChart: %v", err)
+	}
+	if len(chart.Data) != 1 || chart.Stale {
+		t.Errorf("chart = %+v, want the recent last-known chart", chart)
+	}
+	waitForCache(t, c, "chart:stock:BUMI:1y:1d", `"p":140`)
+
+	// Once refreshed, the fresh data is served.
+	price, _ = svc.GetStockPriceWithCurrency(context.Background(), "BUMI", "IDR")
+	if price.Price != 140 {
+		t.Errorf("price after refresh = %v, want 140", price.Price)
+	}
+}
+
+func TestCryptoPrice_OldLastKnownIsNotServedBeforeFetching(t *testing.T) {
+	c := cache.NewMemoryCache()
+	last, _ := json.Marshal(port.PriceData{Symbol: "BTC", Price: 95, Currency: "IDR", Source: "coingecko", FetchedAt: time.Now().Add(-time.Hour)})
+	_ = c.Set(context.Background(), "last:crypto:BTC:IDR", last, time.Hour)
+	srv, calls := flakyCoinGecko(t, 0, 0, "")
+	svc := NewPriceService(&config.PriceAPIConfig{CryptoAPI: srv.URL}, c)
+
+	price, err := svc.GetCryptoPriceWithCurrency(context.Background(), "BTC", "IDR")
+	if err != nil {
+		t.Fatalf("GetCryptoPriceWithCurrency: %v", err)
+	}
+	if price.Price != 100 || calls() != 1 {
+		t.Errorf("price = %v after %d calls, want the fetched 100 (an hour-old price is not served)", price.Price, calls())
 	}
 }

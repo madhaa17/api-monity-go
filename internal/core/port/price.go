@@ -20,8 +20,6 @@ type PriceService interface {
 	GetCryptoPrice(ctx context.Context, symbol string) (*PriceData, error)
 	GetStockPrice(ctx context.Context, symbol string) (*PriceData, error)
 	GetPrice(ctx context.Context, assetType string, symbol string) (*PriceData, error)
-	GetHistoricalCryptoPrice(ctx context.Context, symbol string, timestamp time.Time) (*PriceData, error)
-	GetHistoricalCryptoOHLCV(ctx context.Context, symbol string, timeStart, timeEnd time.Time, interval string) ([]OHLCVData, error)
 	GetCryptoChart(ctx context.Context, symbol string, currency string, days int) (*ChartResponse, error)
 	GetStockChart(ctx context.Context, symbol string, rangeParam string, interval string) (*ChartResponse, error)
 	// SearchSymbols finds tickers matching query for assetType (CRYPTO or STOCK).
@@ -56,6 +54,11 @@ type ChartResponse struct {
 	Symbol   string           `json:"symbol"`
 	Currency string           `json:"currency"`
 	Data     []ChartDataPoint `json:"data"`
+	// PreviousClose is the close of the session before the chart's, the baseline of an intraday
+	// (1d) stock chart; 0 when not given.
+	PreviousClose float64 `json:"previousClose,omitempty"`
+	// FetchedAt is when the chart was fetched from the price source.
+	FetchedAt time.Time `json:"fetchedAt"`
 	// Stale is true when the price source could not be reached and this is the last chart
 	// fetched earlier.
 	Stale bool `json:"stale,omitempty"`
@@ -73,18 +76,4 @@ type PriceData struct {
 	// Stale is true when the price source could not be reached and this is the last price fetched
 	// earlier, at FetchedAt.
 	Stale bool `json:"stale,omitempty"`
-}
-
-type OHLCVData struct {
-	Symbol    string    `json:"symbol"`
-	TimeOpen  time.Time `json:"timeOpen"`
-	TimeClose time.Time `json:"timeClose"`
-	Open      float64   `json:"open"`
-	High      float64   `json:"high"`
-	Low       float64   `json:"low"`
-	Close     float64   `json:"close"`
-	Volume    float64   `json:"volume"`
-	MarketCap float64   `json:"marketCap"`
-	Currency  string    `json:"currency"`
-	Source    string    `json:"source"`
 }

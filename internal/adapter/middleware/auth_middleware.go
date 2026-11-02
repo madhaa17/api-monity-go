@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"monity/internal/config"
@@ -23,6 +24,10 @@ const (
 )
 
 const revokedKeyPrefix = "revoked:"
+
+// passwordChangedKeyPrefix + user ID holds the Unix time of the user's last password change, set by
+// the auth service. Tokens issued before it are rejected.
+const passwordChangedKeyPrefix = "pwchanged:"
 
 type AuthMiddleware struct {
 	cfg   *config.Config
@@ -86,6 +91,11 @@ func (m *AuthMiddleware) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 					return
 				}
 			}
+			if m.issuedBeforePasswordChange(r.Context(), claims) {
+				slog.Warn("auth_failed", "reason", "token issued before password change", "ip", ip, "path", path)
+				response.Error(w, http.StatusUnauthorized, "token has been revoked", nil)
+				return
+			}
 		}
 
 		// Extract claims (safely handling types)
@@ -107,6 +117,25 @@ func (m *AuthMiddleware) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 
 		next(w, r.WithContext(ctx))
 	}
+}
+
+// issuedBeforePasswordChange reports whether the token predates the user's last password change.
+// Tokens without "iat" were issued before it existed and count as older.
+func (m *AuthMiddleware) issuedBeforePasswordChange(ctx context.Context, claims jwt.MapClaims) bool {
+	sub, ok := claims["sub"].(float64)
+	if !ok {
+		return false
+	}
+	raw, _ := m.cache.Get(ctx, passwordChangedKeyPrefix+strconv.FormatInt(int64(sub), 10))
+	if len(raw) == 0 {
+		return false
+	}
+	changedAt, err := strconv.ParseInt(string(raw), 10, 64)
+	if err != nil {
+		return false
+	}
+	iat, _ := claims["iat"].(float64)
+	return int64(iat) < changedAt
 }
 
 func authClientIP(r *http.Request) string {

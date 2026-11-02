@@ -37,9 +37,10 @@ func (s *PortfolioService) GetPortfolio(ctx context.Context, userID int64, curre
 
 	var assetValues []port.AssetValueResponse
 	totalValue := decimal.Zero
+	prices := fetchMarketPrices(ctx, s.priceService, assets, currency)
 
 	for _, asset := range assets {
-		assetValue, err := s.calculateAssetValue(ctx, &asset, currency)
+		assetValue, err := s.calculateAssetValue(ctx, &asset, currency, prices)
 		if err != nil {
 			assetValue = &port.AssetValueResponse{
 				UUID:         asset.UUID,
@@ -81,10 +82,13 @@ func (s *PortfolioService) GetAssetValue(ctx context.Context, userID int64, asse
 		return nil, fmt.Errorf("asset not found")
 	}
 
-	return s.calculateAssetValue(ctx, asset, currency)
+	prices := fetchMarketPrices(ctx, s.priceService, []models.Asset{*asset}, currency)
+	return s.calculateAssetValue(ctx, asset, currency, prices)
 }
 
-func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *models.Asset, currency string) (*port.AssetValueResponse, error) {
+// calculateAssetValue values asset in currency; prices holds the market prices of crypto and
+// stock assets, from fetchMarketPrices.
+func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *models.Asset, currency string, prices marketPrices) (*port.AssetValueResponse, error) {
 	assetCurrency := asset.PurchaseCurrency
 	if assetCurrency == "" {
 		assetCurrency = port.DefaultCurrency
@@ -154,14 +158,8 @@ func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *model
 		}, nil
 	}
 
-	var priceData *port.PriceData
-	var err error
-
 	switch asset.Type {
-	case models.AssetTypeCrypto:
-		priceData, err = s.priceService.GetCryptoPriceWithCurrency(ctx, *asset.Symbol, currency)
-	case models.AssetTypeStock:
-		priceData, err = s.priceService.GetStockPriceWithCurrency(ctx, *asset.Symbol, currency)
+	case models.AssetTypeCrypto, models.AssetTypeStock:
 	default:
 		return &port.AssetValueResponse{
 			UUID:         asset.UUID,
@@ -175,6 +173,8 @@ func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *model
 			PriceSource:  "unsupported_type",
 		}, nil
 	}
+
+	priceData, err := prices.get(asset)
 
 	if err != nil {
 		// Fallback: use purchase price when external price is unavailable (e.g. API down, no key)
@@ -202,6 +202,7 @@ func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *model
 	value := effectiveQty.Mul(currentPrice)
 	fetchedAt := priceData.FetchedAt
 
+	// Currency is the price's: it stays in its source currency when the exchange rate is unavailable.
 	return &port.AssetValueResponse{
 		UUID:         asset.UUID,
 		Name:         asset.Name,
@@ -210,7 +211,7 @@ func (s *PortfolioService) calculateAssetValue(ctx context.Context, asset *model
 		Quantity:     asset.Quantity,
 		CurrentPrice: currentPrice,
 		Value:        value,
-		Currency:     currency,
+		Currency:     priceData.Currency,
 		PriceSource:  priceData.Source,
 		PriceAsOf:    &fetchedAt,
 		PriceStale:   priceData.Stale,

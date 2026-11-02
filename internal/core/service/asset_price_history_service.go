@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -31,30 +30,37 @@ func NewAssetPriceHistoryService(
 	}
 }
 
+// maxClockSkew is how far in the future a recorded price's time may be, for clients whose clock
+// runs slightly ahead.
+const maxClockSkew = 5 * time.Minute
+
+// maxPriceHistoryLimit caps how many price history entries one request returns.
+const maxPriceHistoryLimit = 1000
+
 func (s *AssetPriceHistoryService) RecordPrice(ctx context.Context, userID int64, assetUUID string, req port.RecordPriceRequest) (*models.AssetPriceHistory, error) {
 	// Validate
 	if req.Price <= 0 {
-		return nil, errors.New("price must be positive")
+		return nil, port.NewValidationError("price must be positive")
 	}
 	if req.Source == "" {
-		return nil, errors.New("source is required")
+		return nil, port.NewValidationError("source is required")
 	}
 	if err := validation.CheckMaxLen(req.Source, validation.MaxSourceLen); err != nil {
-		return nil, fmt.Errorf("source %w", err)
+		return nil, port.NewValidationError("source " + err.Error())
 	}
-
-	// Get asset to verify ownership and get ID
-	asset, err := s.assetRepo.GetByUUID(ctx, assetUUID, userID)
-	if err != nil {
-		return nil, fmt.Errorf("get asset: %w", err)
-	}
-	if asset == nil {
-		return nil, errors.New("asset not found")
-	}
-
 	recordedAt := req.RecordedAt
 	if recordedAt.IsZero() {
 		recordedAt = time.Now()
+	}
+	// The latest entry values cash, livestock and real estate, so a future one would hide every
+	// update made before its time comes.
+	if recordedAt.After(time.Now().Add(maxClockSkew)) {
+		return nil, port.NewValidationError("recordedAt must not be in the future")
+	}
+
+	asset, err := s.ownedAsset(ctx, userID, assetUUID)
+	if err != nil {
+		return nil, err
 	}
 
 	history := &models.AssetPriceHistory{
@@ -72,18 +78,15 @@ func (s *AssetPriceHistoryService) RecordPrice(ctx context.Context, userID int64
 }
 
 func (s *AssetPriceHistoryService) GetPriceHistory(ctx context.Context, userID int64, assetUUID string, limit int) ([]models.AssetPriceHistory, error) {
-	// Get asset to verify ownership and get ID
-	asset, err := s.assetRepo.GetByUUID(ctx, assetUUID, userID)
+	asset, err := s.ownedAsset(ctx, userID, assetUUID)
 	if err != nil {
-		return nil, fmt.Errorf("get asset: %w", err)
-	}
-	if asset == nil {
-		return nil, errors.New("asset not found")
+		return nil, err
 	}
 
 	if limit <= 0 {
 		limit = 30 // Default limit
 	}
+	limit = min(limit, maxPriceHistoryLimit)
 
 	histories, err := s.historyRepo.ListByAssetID(ctx, asset.ID, limit)
 	if err != nil {
@@ -97,25 +100,35 @@ func (s *AssetPriceHistoryService) GetPriceHistory(ctx context.Context, userID i
 	return histories, nil
 }
 
+// FetchAndRecordPrice records the current market price of a crypto or stock asset, per unit and in
+// the asset's purchase currency. Price history entries carry no currency, so a price that could
+// not be converted, or a stale one repeated from an earlier fetch, is refused instead of recorded.
 func (s *AssetPriceHistoryService) FetchAndRecordPrice(ctx context.Context, userID int64, assetUUID string) (*models.AssetPriceHistory, error) {
-	// Get asset to verify ownership
-	asset, err := s.assetRepo.GetByUUID(ctx, assetUUID, userID)
+	asset, err := s.ownedAsset(ctx, userID, assetUUID)
 	if err != nil {
-		return nil, fmt.Errorf("get asset: %w", err)
-	}
-	if asset == nil {
-		return nil, errors.New("asset not found")
+		return nil, err
 	}
 
-	// Asset must have a symbol for price lookup
+	if asset.Type != models.AssetTypeCrypto && asset.Type != models.AssetTypeStock {
+		return nil, port.NewValidationError("market prices are only available for crypto and stock assets")
+	}
 	if asset.Symbol == nil || *asset.Symbol == "" {
-		return nil, errors.New("asset has no symbol for price lookup")
+		return nil, port.NewValidationError("asset has no symbol for price lookup")
 	}
 
-	// Fetch price from external API
-	priceData, err := s.priceService.GetPrice(ctx, string(asset.Type), *asset.Symbol)
+	currency := asset.PurchaseCurrency
+	if currency == "" {
+		currency = port.DefaultCurrency
+	}
+	priceData, err := s.priceService.GetPriceWithCurrency(ctx, string(asset.Type), *asset.Symbol, currency)
 	if err != nil {
 		return nil, fmt.Errorf("fetch price: %w", err)
+	}
+	if priceData.Stale {
+		return nil, fmt.Errorf("price source unreachable for %s: %w", *asset.Symbol, port.ErrPriceUnavailable)
+	}
+	if priceData.Currency != currency {
+		return nil, fmt.Errorf("no %s to %s exchange rate for %s: %w", priceData.Currency, currency, *asset.Symbol, port.ErrPriceUnavailable)
 	}
 
 	// Record the price
@@ -131,4 +144,16 @@ func (s *AssetPriceHistoryService) FetchAndRecordPrice(ctx context.Context, user
 	}
 
 	return history, nil
+}
+
+// ownedAsset returns the user's asset, or an error wrapping port.ErrNotFound.
+func (s *AssetPriceHistoryService) ownedAsset(ctx context.Context, userID int64, assetUUID string) (*models.Asset, error) {
+	asset, err := s.assetRepo.GetByUUID(ctx, assetUUID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get asset: %w", err)
+	}
+	if asset == nil {
+		return nil, fmt.Errorf("asset: %w", port.ErrNotFound)
+	}
+	return asset, nil
 }

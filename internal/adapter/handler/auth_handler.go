@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -133,17 +134,13 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, http.StatusOK, "ok", user)
 }
 
+// Logout revokes the access token from the Authorization header and the refresh token from the
+// body. It needs no valid session, so a client whose access token has expired can still revoke its
+// refresh token; at least one of the two must be sent.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	userID, _ := r.Context().Value(middleware.CtxKeyUserID).(int64)
-
-	authHeader := r.Header.Get("Authorization")
 	var accessToken string
-	if parts := strings.SplitN(authHeader, " ", 2); len(parts) == 2 && parts[0] == "Bearer" {
+	if parts := strings.SplitN(r.Header.Get("Authorization"), " ", 2); len(parts) == 2 && parts[0] == "Bearer" {
 		accessToken = parts[1]
-	}
-	if accessToken == "" {
-		response.ErrorWithLog(w, r, http.StatusBadRequest, "authorization header required", nil)
-		return
 	}
 
 	var body struct {
@@ -151,10 +148,47 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 
-	if err := h.svc.Logout(r.Context(), accessToken, body.RefreshToken); err != nil {
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "logout failed", nil)
+	if accessToken == "" && body.RefreshToken == "" {
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "access token or refresh_token required", nil)
 		return
 	}
-	slog.Info("logout", "user_id", userID)
+
+	if err := h.svc.Logout(r.Context(), accessToken, body.RefreshToken); err != nil {
+		response.ErrorWithLog(w, r, http.StatusInternalServerError, "logout failed", err.Error())
+		return
+	}
+	slog.Info("logout")
 	response.Success(w, http.StatusOK, "logged out", nil)
+}
+
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.CtxKeyUserID).(int64)
+	if !ok {
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid request body", err.Error())
+		return
+	}
+
+	resp, err := h.svc.ChangePassword(r.Context(), userID, port.ChangePasswordRequest{
+		CurrentPassword: body.CurrentPassword,
+		NewPassword:     body.NewPassword,
+	})
+	if err != nil {
+		var validationErr *port.ValidationError
+		if errors.As(err, &validationErr) {
+			slog.Warn("change_password_failed", "user_id", userID, "reason", validationErr.Message)
+		}
+		writeServiceError(w, r, err, "user not found", "failed to change password")
+		return
+	}
+	slog.Info("password_changed", "user_id", userID)
+	response.Success(w, http.StatusOK, "password changed", resp)
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"monity/internal/core/port"
+	"monity/internal/models"
 	"monity/internal/pkg/validation"
 
 	"github.com/shopspring/decimal"
@@ -136,4 +137,15 @@ func parseDueFilter(r *http.Request) (dueFrom, dueTo *time.Time) {
 		}
 	}
 	return dueFrom, dueTo
+}
+
+// parseObligationStatus reads the debts/receivables status filter; unknown values are ignored.
+func parseObligationStatus(r *http.Request) *string {
+	s := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("status")))
+	switch models.ObligationStatus(s) {
+	case models.ObligationStatusPending, models.ObligationStatusPartial,
+		models.ObligationStatusPaid, models.ObligationStatusOverdue:
+		return &s
+	}
+	return nil
 }

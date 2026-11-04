@@ -8,8 +8,10 @@ import (
 
 	"monity/internal/core/port"
 	"monity/internal/models"
+	"monity/internal/pkg/validation"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type DebtRepo struct {
@@ -21,79 +23,68 @@ func NewDebtRepository(db *gorm.DB) port.DebtRepository {
 }
 
 func (r *DebtRepo) Create(ctx context.Context, debt *models.Debt) error {
-	result := r.db.WithContext(ctx).Create(debt)
-	if result.Error != nil {
-		return fmt.Errorf("create debt: %w", result.Error)
+	if err := conn(ctx, r.db).Omit(clause.Associations).Create(debt).Error; err != nil {
+		return fmt.Errorf("create debt: %w", err)
 	}
 	return nil
 }
 
 func (r *DebtRepo) GetByUUID(ctx context.Context, uuid string, userID int64) (*models.Debt, error) {
+	return r.getByUUID(conn(ctx, r.db).Preload("Asset"), uuid, userID)
+}
+
+func (r *DebtRepo) GetByUUIDForUpdate(ctx context.Context, uuid string, userID int64) (*models.Debt, error) {
+	return r.getByUUID(conn(ctx, r.db).Clauses(clause.Locking{Strength: "UPDATE"}), uuid, userID)
+}
+
+func (r *DebtRepo) getByUUID(db *gorm.DB, uuid string, userID int64) (*models.Debt, error) {
+	if !validation.ValidUUID(uuid) {
+		return nil, nil // a malformed UUID cannot match; avoid a database cast error
+	}
 	var debt models.Debt
-	result := r.db.WithContext(ctx).Where("uuid = ? AND user_id = ?", uuid, userID).First(&debt)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+	if err := db.Where("uuid = ? AND user_id = ?", uuid, userID).First(&debt).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("get debt: %w", result.Error)
+		return nil, fmt.Errorf("get debt: %w", err)
 	}
 	return &debt, nil
 }
 
 func (r *DebtRepo) ListByUserID(ctx context.Context, userID int64, status *string, dueFrom, dueTo *time.Time, page, limit int) ([]models.Debt, int64, error) {
-	q := r.db.WithContext(ctx).Model(&models.Debt{}).Where("user_id = ?", userID)
-	if status != nil && *status != "" {
-		q = q.Where("status = ?", *status)
-	}
-	if dueFrom != nil {
-		q = q.Where("due_date >= ?", dueFrom)
-	}
-	if dueTo != nil {
-		end := dueTo.AddDate(0, 0, 1)
-		q = q.Where("due_date < ?", end)
-	}
+	q := obligationFilter(conn(ctx, r.db).Model(&models.Debt{}), userID, status, dueFrom, dueTo)
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("count debts: %w", err)
 	}
 	var debts []models.Debt
-	offset := (page - 1) * limit
-	if offset < 0 {
-		offset = 0
-	}
-	listQ := r.db.WithContext(ctx).Where("user_id = ?", userID)
-	if status != nil && *status != "" {
-		listQ = listQ.Where("status = ?", *status)
-	}
-	if dueFrom != nil {
-		listQ = listQ.Where("due_date >= ?", dueFrom)
-	}
-	if dueTo != nil {
-		end := dueTo.AddDate(0, 0, 1)
-		listQ = listQ.Where("due_date < ?", end)
-	}
-	result := listQ.Order("due_date ASC NULLS LAST, created_at DESC").Offset(offset).Limit(limit).Find(&debts)
-	if result.Error != nil {
-		return nil, 0, fmt.Errorf("list debts: %w", result.Error)
+	offset := max((page-1)*limit, 0)
+	err := obligationFilter(conn(ctx, r.db).Preload("Asset"), userID, status, dueFrom, dueTo).
+		Order(obligationOrder).Offset(offset).Limit(limit).Find(&debts).Error
+	if err != nil {
+		return nil, 0, fmt.Errorf("list debts: %w", err)
 	}
 	return debts, total, nil
 }
 
 func (r *DebtRepo) Update(ctx context.Context, debt *models.Debt) error {
-	result := r.db.WithContext(ctx).Save(debt)
-	if result.Error != nil {
-		return fmt.Errorf("update debt: %w", result.Error)
+	// Omit associations: saving a preloaded Asset would overwrite its balance with a stale copy.
+	if err := conn(ctx, r.db).Omit(clause.Associations).Save(debt).Error; err != nil {
+		return fmt.Errorf("update debt: %w", err)
 	}
 	return nil
 }
 
 func (r *DebtRepo) Delete(ctx context.Context, uuid string, userID int64) error {
-	result := r.db.WithContext(ctx).Where("uuid = ? AND user_id = ?", uuid, userID).Delete(&models.Debt{})
+	if !validation.ValidUUID(uuid) {
+		return fmt.Errorf("debt: %w", port.ErrNotFound)
+	}
+	result := conn(ctx, r.db).Where("uuid = ? AND user_id = ?", uuid, userID).Delete(&models.Debt{})
 	if result.Error != nil {
 		return fmt.Errorf("delete debt: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("debt not found or not owned by user")
+		return fmt.Errorf("debt: %w", port.ErrNotFound)
 	}
 	return nil
 }

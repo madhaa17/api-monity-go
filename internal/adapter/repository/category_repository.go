@@ -15,7 +15,10 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-const pgUniqueViolation = "23505"
+const (
+	pgUniqueViolation     = "23505"
+	pgForeignKeyViolation = "23503"
+)
 
 type CategoryRepo struct {
 	db *gorm.DB

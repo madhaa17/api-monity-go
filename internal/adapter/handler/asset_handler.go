@@ -31,18 +31,9 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" || req.Type == "" {
-		response.ErrorWithLog(w, r, http.StatusBadRequest, "missing required fields", nil)
-		return
-	}
-
 	asset, err := h.svc.CreateAsset(r.Context(), userID, req)
 	if err != nil {
-		if strings.Contains(err.Error(), "must be") {
-			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
-			return
-		}
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to create asset", err.Error())
+		writeServiceError(w, r, err, "asset not found", "failed to create asset")
 		return
 	}
 
@@ -79,11 +70,7 @@ func (h *AssetHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	asset, err := h.svc.GetAsset(r.Context(), userID, uuid)
 	if err != nil {
-		if err.Error() == "asset not found" {
-			response.ErrorWithLog(w, r, http.StatusNotFound, "asset not found", nil)
-			return
-		}
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to get asset", err.Error())
+		writeServiceError(w, r, err, "asset not found", "failed to get asset")
 		return
 	}
 
@@ -111,15 +98,7 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	asset, err := h.svc.UpdateAsset(r.Context(), userID, uuid, req)
 	if err != nil {
-		if err.Error() == "asset not found" {
-			response.ErrorWithLog(w, r, http.StatusNotFound, "asset not found", nil)
-			return
-		}
-		if strings.Contains(err.Error(), "must be") {
-			response.ErrorWithLog(w, r, http.StatusBadRequest, err.Error(), nil)
-			return
-		}
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to update asset", err.Error())
+		writeServiceError(w, r, err, "asset not found", "failed to update asset")
 		return
 	}
 
@@ -140,11 +119,7 @@ func (h *AssetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.DeleteAsset(r.Context(), userID, uuid); err != nil {
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not owned") {
-			response.ErrorWithLog(w, r, http.StatusNotFound, "asset not found", nil)
-			return
-		}
-		response.ErrorWithLog(w, r, http.StatusInternalServerError, "failed to delete asset", err.Error())
+		writeServiceError(w, r, err, "asset not found", "failed to delete asset")
 		return
 	}
 

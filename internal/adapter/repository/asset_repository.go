@@ -9,6 +9,7 @@ import (
 	"monity/internal/models"
 	"monity/internal/pkg/validation"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
@@ -109,12 +110,19 @@ func (r *AssetRepo) AdjustQuantity(ctx context.Context, assetID int64, delta dec
 }
 
 func (r *AssetRepo) Delete(ctx context.Context, uuid string, userID int64) error {
+	if !validation.ValidUUID(uuid) {
+		return fmt.Errorf("asset: %w", port.ErrNotFound)
+	}
 	result := conn(ctx, r.db).Where("uuid = ? AND user_id = ?", uuid, userID).Delete(&models.Asset{})
 	if result.Error != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(result.Error, &pgErr) && pgErr.Code == pgForeignKeyViolation {
+			return fmt.Errorf("delete asset: %w", port.ErrConflict) // still referenced by a transaction
+		}
 		return fmt.Errorf("delete asset: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("asset not found or not owned by user")
+		return fmt.Errorf("asset: %w", port.ErrNotFound)
 	}
 	return nil
 }

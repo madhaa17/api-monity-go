@@ -141,17 +141,17 @@ func (s *InsightService) GetFinancialOverview(ctx context.Context, userID int64)
 	return &port.FinancialOverview{
 		TotalAssets:            totalAssets,
 		TotalSavingGoals:       savingGoalSummary.TotalGoals,
-		TotalTargetAmount:       savingGoalSummary.TotalTarget,
+		TotalTargetAmount:      savingGoalSummary.TotalTarget,
 		TotalCurrentAmount:     savingGoalSummary.TotalCurrent,
-		SavingGoalProgress:      savingGoalSummary.OverallProgress,
-		MonthlyIncome:           monthlyIncome,
-		MonthlyExpense:          monthlyExpense,
-		MonthlyNetSaving:        monthlyNetSaving,
-		MonthlyTrend:            monthlyTrend,
-		TotalDebt:               totalDebt,
-		TotalReceivable:         totalReceivable,
-		DebtOverdueCount:        debtOverdueCount,
-		ReceivableOverdueCount:  receivableOverdueCount,
+		SavingGoalProgress:     savingGoalSummary.OverallProgress,
+		MonthlyIncome:          monthlyIncome,
+		MonthlyExpense:         monthlyExpense,
+		MonthlyNetSaving:       monthlyNetSaving,
+		MonthlyTrend:           monthlyTrend,
+		TotalDebt:              totalDebt,
+		TotalReceivable:        totalReceivable,
+		DebtOverdueCount:       debtOverdueCount,
+		ReceivableOverdueCount: receivableOverdueCount,
 	}, nil
 }
 

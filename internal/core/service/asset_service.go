@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"monity/internal/core/port"
@@ -22,37 +23,62 @@ func NewAssetService(repo port.AssetRepository) port.AssetService {
 }
 
 func (s *AssetService) CreateAsset(ctx context.Context, userID int64, req port.CreateAssetRequest) (*models.Asset, error) {
-	if err := validation.CheckMaxLen(req.Name, validation.MaxAssetNameLen); err != nil {
-		return nil, fmt.Errorf("name %w", err)
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		return nil, port.NewValidationError("name is required")
 	}
-	if req.Symbol != nil {
-		if err := validation.CheckMaxLen(*req.Symbol, validation.MaxSymbolLen); err != nil {
-			return nil, fmt.Errorf("symbol %w", err)
+	if err := validateAssetText("name", &req.Name, validation.MaxAssetNameLen); err != nil {
+		return nil, err
+	}
+	if err := validateAssetType(req.Type); err != nil {
+		return nil, err
+	}
+	if req.Status != nil {
+		if err := validateAssetStatus(*req.Status); err != nil {
+			return nil, err
 		}
 	}
-	if req.Description != nil {
-		if err := validation.CheckMaxLen(*req.Description, validation.MaxDescriptionLen); err != nil {
-			return nil, fmt.Errorf("description %w", err)
+	if err := validateAssetText("symbol", req.Symbol, validation.MaxSymbolLen); err != nil {
+		return nil, err
+	}
+	if err := validateAssetText("description", req.Description, validation.MaxDescriptionLen); err != nil {
+		return nil, err
+	}
+	if err := validateAssetText("notes", req.Notes, validation.MaxNoteLen); err != nil {
+		return nil, err
+	}
+	if err := validateAssetText("yieldPeriod", req.YieldPeriod, validation.MaxYieldPeriodLen); err != nil {
+		return nil, err
+	}
+	for field, v := range map[string]float64{"quantity": req.Quantity, "purchasePrice": req.PurchasePrice, "totalCost": req.TotalCost} {
+		if err := validateAssetNumber(field, v); err != nil {
+			return nil, err
 		}
 	}
-	if req.Notes != nil {
-		if err := validation.CheckMaxLen(*req.Notes, validation.MaxNoteLen); err != nil {
-			return nil, fmt.Errorf("notes %w", err)
+	for field, v := range map[string]*float64{
+		"transactionFee": req.TransactionFee, "maintenanceCost": req.MaintenanceCost,
+		"targetPrice": req.TargetPrice, "estimatedYield": req.EstimatedYield,
+	} {
+		if err := validateOptionalAssetNumber(field, v); err != nil {
+			return nil, err
 		}
 	}
-	if req.YieldPeriod != nil {
-		if err := validation.CheckMaxLen(*req.YieldPeriod, validation.MaxYieldPeriodLen); err != nil {
-			return nil, fmt.Errorf("yieldPeriod %w", err)
-		}
-	}
-	// Parse purchase date
+
 	purchaseDate := time.Now()
-	if req.PurchaseDate != "" {
-		parsed, err := time.Parse(time.RFC3339, req.PurchaseDate)
+	if strings.TrimSpace(req.PurchaseDate) != "" {
+		parsed, err := parseAssetDate("purchaseDate", req.PurchaseDate)
 		if err != nil {
-			return nil, fmt.Errorf("invalid purchase date format: %w", err)
+			return nil, err
 		}
 		purchaseDate = parsed
+	}
+	var targetDate *time.Time
+	if req.TargetDate != nil {
+		parsed, err := parseOptionalAssetDate("targetDate", *req.TargetDate)
+		if err != nil {
+			return nil, err
+		}
+		targetDate = parsed
 	}
 
 	// Default values
@@ -100,12 +126,7 @@ func (s *AssetService) CreateAsset(ctx context.Context, userID int64, req port.C
 		price := decimal.NewFromFloat(*req.TargetPrice)
 		asset.TargetPrice = &price
 	}
-	if req.TargetDate != nil {
-		parsed, err := time.Parse(time.RFC3339, *req.TargetDate)
-		if err == nil {
-			asset.TargetDate = &parsed
-		}
-	}
+	asset.TargetDate = targetDate
 	if req.EstimatedYield != nil {
 		yield := decimal.NewFromFloat(*req.EstimatedYield)
 		asset.EstimatedYield = &yield
@@ -126,7 +147,7 @@ func (s *AssetService) GetAsset(ctx context.Context, userID int64, uuid string) 
 		return nil, fmt.Errorf("get asset: %w", err)
 	}
 	if asset == nil {
-		return nil, errors.New("asset not found")
+		return nil, fmt.Errorf("asset: %w", port.ErrNotFound)
 	}
 	return asset, nil
 }
@@ -162,12 +183,13 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 		return nil, err
 	}
 
+	if err := validateAssetUpdate(&req); err != nil {
+		return nil, err
+	}
+
 	// Basic fields
 	if req.Name != nil {
-		if err := validation.CheckMaxLen(*req.Name, validation.MaxAssetNameLen); err != nil {
-			return nil, fmt.Errorf("name %w", err)
-		}
-		asset.Name = *req.Name
+		asset.Name = strings.TrimSpace(*req.Name)
 	}
 	if req.Type != nil {
 		asset.Type = *req.Type
@@ -176,9 +198,6 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 		asset.Quantity = decimal.NewFromFloat(*req.Quantity)
 	}
 	if req.Symbol != nil {
-		if err := validation.CheckMaxLen(*req.Symbol, validation.MaxSymbolLen); err != nil {
-			return nil, fmt.Errorf("symbol %w", err)
-		}
 		asset.Symbol = req.Symbol
 	}
 
@@ -187,11 +206,7 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 		asset.PurchasePrice = decimal.NewFromFloat(*req.PurchasePrice)
 	}
 	if req.PurchaseDate != nil {
-		parsed, err := time.Parse(time.RFC3339, *req.PurchaseDate)
-		if err != nil {
-			return nil, fmt.Errorf("invalid purchase date format: %w", err)
-		}
-		asset.PurchaseDate = parsed
+		asset.PurchaseDate, _ = parseAssetDate("purchaseDate", *req.PurchaseDate) // validated above
 	}
 	if req.PurchaseCurrency != nil {
 		asset.PurchaseCurrency = *req.PurchaseCurrency
@@ -216,10 +231,7 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 		asset.TargetPrice = &price
 	}
 	if req.TargetDate != nil {
-		parsed, err := time.Parse(time.RFC3339, *req.TargetDate)
-		if err == nil {
-			asset.TargetDate = &parsed
-		}
+		asset.TargetDate, _ = parseOptionalAssetDate("targetDate", *req.TargetDate)
 	}
 
 	// Real Asset Specific
@@ -228,23 +240,14 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 		asset.EstimatedYield = &yield
 	}
 	if req.YieldPeriod != nil {
-		if err := validation.CheckMaxLen(*req.YieldPeriod, validation.MaxYieldPeriodLen); err != nil {
-			return nil, fmt.Errorf("yieldPeriod %w", err)
-		}
 		asset.YieldPeriod = req.YieldPeriod
 	}
 
 	// Documentation
 	if req.Description != nil {
-		if err := validation.CheckMaxLen(*req.Description, validation.MaxDescriptionLen); err != nil {
-			return nil, fmt.Errorf("description %w", err)
-		}
 		asset.Description = req.Description
 	}
 	if req.Notes != nil {
-		if err := validation.CheckMaxLen(*req.Notes, validation.MaxNoteLen); err != nil {
-			return nil, fmt.Errorf("notes %w", err)
-		}
 		asset.Notes = req.Notes
 	}
 
@@ -253,10 +256,7 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 		asset.Status = *req.Status
 	}
 	if req.SoldAt != nil {
-		parsed, err := time.Parse(time.RFC3339, *req.SoldAt)
-		if err == nil {
-			asset.SoldAt = &parsed
-		}
+		asset.SoldAt, _ = parseOptionalAssetDate("soldAt", *req.SoldAt)
 	}
 	if req.SoldPrice != nil {
 		price := decimal.NewFromFloat(*req.SoldPrice)
@@ -270,8 +270,62 @@ func (s *AssetService) UpdateAsset(ctx context.Context, userID int64, uuid strin
 }
 
 func (s *AssetService) DeleteAsset(ctx context.Context, userID int64, uuid string) error {
-	if err := s.repo.Delete(ctx, uuid, userID); err != nil {
+	err := s.repo.Delete(ctx, uuid, userID)
+	if errors.Is(err, port.ErrConflict) {
+		return port.NewValidationError("this asset is still used by incomes, expenses, debts or receivables; delete or move those first")
+	}
+	if err != nil {
 		return fmt.Errorf("delete asset: %w", err)
+	}
+	return nil
+}
+
+// validateAssetUpdate checks every field of a partial update before any of it is applied.
+func validateAssetUpdate(req *port.UpdateAssetRequest) error {
+	if req.Name != nil {
+		if strings.TrimSpace(*req.Name) == "" {
+			return port.NewValidationError("name cannot be empty")
+		}
+		if err := validateAssetText("name", req.Name, validation.MaxAssetNameLen); err != nil {
+			return err
+		}
+	}
+	if req.Type != nil {
+		if err := validateAssetType(*req.Type); err != nil {
+			return err
+		}
+	}
+	if req.Status != nil {
+		if err := validateAssetStatus(*req.Status); err != nil {
+			return err
+		}
+	}
+	for field, v := range map[string]*string{"symbol": req.Symbol, "description": req.Description, "notes": req.Notes, "yieldPeriod": req.YieldPeriod} {
+		max := map[string]int{"symbol": validation.MaxSymbolLen, "description": validation.MaxDescriptionLen, "notes": validation.MaxNoteLen, "yieldPeriod": validation.MaxYieldPeriodLen}[field]
+		if err := validateAssetText(field, v, max); err != nil {
+			return err
+		}
+	}
+	for field, v := range map[string]*float64{
+		"quantity": req.Quantity, "purchasePrice": req.PurchasePrice, "totalCost": req.TotalCost,
+		"transactionFee": req.TransactionFee, "maintenanceCost": req.MaintenanceCost,
+		"targetPrice": req.TargetPrice, "estimatedYield": req.EstimatedYield, "soldPrice": req.SoldPrice,
+	} {
+		if err := validateOptionalAssetNumber(field, v); err != nil {
+			return err
+		}
+	}
+	if req.PurchaseDate != nil {
+		if _, err := parseAssetDate("purchaseDate", *req.PurchaseDate); err != nil {
+			return err
+		}
+	}
+	for field, v := range map[string]*string{"targetDate": req.TargetDate, "soldAt": req.SoldAt} {
+		if v != nil {
+			if _, err := parseOptionalAssetDate(field, *v); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

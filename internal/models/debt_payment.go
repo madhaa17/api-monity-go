@@ -16,7 +16,7 @@ type DebtPayment struct {
 	AssetID   *int64          `gorm:"index" json:"-"`
 	CreatedAt time.Time       `json:"createdAt"`
 
-	Debt *Debt `gorm:"foreignKey:DebtID" json:"debt,omitempty"`
+	Asset *Asset `gorm:"foreignKey:AssetID" json:"asset,omitempty"`
 }
 
 func (DebtPayment) TableName() string { return "debt_payments" }

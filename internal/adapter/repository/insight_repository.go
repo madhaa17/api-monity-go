@@ -161,7 +161,7 @@ func (r *InsightRepo) GetTotalReceivable(ctx context.Context, userID int64) (dec
 
 func (r *InsightRepo) GetDebtOverdueCount(ctx context.Context, userID int64) (int, error) {
 	var count int64
-	now := time.Now()
+	now := models.StartOfDayUTC(time.Now()) // due today is not yet overdue
 	err := r.db.WithContext(ctx).
 		Model(&models.Debt{}).
 		Where("user_id = ? AND due_date < ? AND status != ?", userID, now, "PAID").
@@ -174,7 +174,7 @@ func (r *InsightRepo) GetDebtOverdueCount(ctx context.Context, userID int64) (in
 
 func (r *InsightRepo) GetReceivableOverdueCount(ctx context.Context, userID int64) (int, error) {
 	var count int64
-	now := time.Now()
+	now := models.StartOfDayUTC(time.Now()) // due today is not yet overdue
 	err := r.db.WithContext(ctx).
 		Model(&models.Receivable{}).
 		Where("user_id = ? AND due_date < ? AND status != ?", userID, now, "PAID").

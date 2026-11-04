@@ -16,13 +16,13 @@ const (
 
 // General string limits
 const (
-	MaxNoteLen         = 500
-	MaxSourceLen       = 200
-	MaxTitleLen        = 200
-	MaxAssetNameLen    = 200
-	MaxDescriptionLen  = 2000
-	MaxSymbolLen       = 20
-	MaxYieldPeriodLen  = 20
+	MaxNoteLen        = 500
+	MaxSourceLen      = 200
+	MaxTitleLen       = 200
+	MaxAssetNameLen   = 200
+	MaxDescriptionLen = 2000
+	MaxSymbolLen      = 20
+	MaxYieldPeriodLen = 20
 )
 
 var emailRegex = regexp.MustCompile(`^[^@]+@[^@]+\.[^@]+$`)

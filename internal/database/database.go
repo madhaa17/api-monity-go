@@ -13,7 +13,12 @@ import (
 
 func NewDB(ctx context.Context, cfg *config.DatabaseConfig) (*gorm.DB, error) {
 	dsn := cfg.DSN()
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		DSN: dsn,
+		// Simple protocol avoids server-side prepared statements, which break
+		// behind PgBouncer in transaction-pooling mode ("prepared statement already exists").
+		PreferSimpleProtocol: true,
+	}), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}

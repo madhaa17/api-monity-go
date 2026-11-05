@@ -7,3 +7,11 @@ knowledge/
 Dockerfile
 docker-compose*.yml
 .dockerignore
+
+# Local build artifacts and tooling (not needed in the image)
+server
+bin/
+.agents/
+.cursor/
+migrations/
+docs/

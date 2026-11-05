@@ -1,6 +1,9 @@
 package config
 
-import "strconv"
+import (
+	"net/url"
+	"strconv"
+)
 
 type Config struct {
 	App       AppConfig
@@ -59,6 +62,7 @@ type DatabaseConfig struct {
 	User               string
 	Password           string
 	Name               string
+	SSLMode            string // disable | prefer | require | verify-full
 	MaxOpenConnections int
 	MaxIdleConnections int
 }
@@ -91,6 +95,7 @@ func Load() (*Config, error) {
 			User:               getEnv("DATABASE_USER", ""),
 			Password:           getEnv("DATABASE_PASSWORD", ""),
 			Name:               getEnv("DATABASE_NAME", ""),
+			SSLMode:            getEnv("DATABASE_SSLMODE", "prefer"),
 			MaxOpenConnections: maxOpen,
 			MaxIdleConnections: maxIdle,
 		},
@@ -124,6 +129,19 @@ func Load() (*Config, error) {
 	}, nil
 }
 
+// DSN builds a postgres:// URL. User and password are URL-escaped so special
+// characters (@, /, :, #) in credentials don't break the connection string.
 func (c *DatabaseConfig) DSN() string {
-	return "postgres://" + c.User + ":" + c.Password + "@" + c.Host + ":" + c.Port + "/" + c.Name + "?sslmode=disable"
+	sslMode := c.SSLMode
+	if sslMode == "" {
+		sslMode = "prefer"
+	}
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(c.User, c.Password),
+		Host:     c.Host + ":" + c.Port,
+		Path:     "/" + c.Name,
+		RawQuery: url.Values{"sslmode": {sslMode}}.Encode(),
+	}
+	return u.String()
 }

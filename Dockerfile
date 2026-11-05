@@ -1,24 +1,36 @@
-FROM golang:1.24.4-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache ca-certificates
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /server ./cmd/server
 
-FROM alpine:3.21
+RUN CGO_ENABLED=0 GOOS=linux \
+    go build -trimpath \
+    -ldflags="-s -w" \
+    -o /app/server ./cmd/server/main.go
 
-RUN apk add --no-cache ca-certificates tzdata
+FROM alpine:3.22
 
 WORKDIR /app
 
-COPY --from=builder /server .
+RUN apk add --no-cache ca-certificates tzdata
 
-EXPOSE ${APP_PORT}
-ENV APP_PORT=${APP_PORT}
+COPY --from=builder /app/server ./server
 
-ENTRYPOINT ["./server"]
+# The app reads APP_PORT (see internal/config). Override it in docker-compose / Dokploy.
+ENV APP_PORT=8080
+
+EXPOSE 8080
+
+USER 10001:10001
+
+# /health also pings the database. busybox wget ships with alpine.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget -qO- "http://127.0.0.1:${APP_PORT}/health" >/dev/null || exit 1
+
+CMD ["./server"]

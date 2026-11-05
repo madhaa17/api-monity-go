@@ -184,6 +184,9 @@ Example: `GET /api/v1/portfolio?currency=USD`.
 | `DATABASE_HOST`, `*`   | PostgreSQL connection         |
 | `JWT_SECRET`, `JWT_REFRESH_SECRET` | **Required**, no defaults. Must differ; ≥ 32 chars when `APP_ENV=production` (`openssl rand -hex 32`). The server refuses to start otherwise. |
 | `CRYPTO_PRICE_API_KEY` | Optional CoinGecko key (higher rate limit) |
+| `STOCK_API_URL` | Optional Yahoo base URL override, e.g. a relay (`relay/yahoo-worker.js`) when Yahoo answers 429 to the server IP |
+| `STOCK_API_PROXY` | Optional `http://` / `socks5://` proxy for Yahoo requests only |
+| `STOCK_API_RELAY_TOKEN` | Sent as `X-Relay-Token`; must match the relay's `RELAY_TOKEN` |
 | `RATE_LIMIT_TTL`       | Rate limit window (seconds)   |
 | `RATE_LIMIT_LIMIT`     | Max requests per window per IP |
 | `CORS_ALLOWED_ORIGINS` | `*` or comma-separated origins |

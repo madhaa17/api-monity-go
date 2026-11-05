@@ -47,7 +47,10 @@ var cryptoIDMap = map[string]string{
 type PriceService struct {
 	cfg        *config.PriceAPIConfig
 	httpClient *http.Client
-	cache      cache.Cache
+	// stockClient sends Yahoo requests: httpClient, or a client through cfg.StockProxy when set.
+	stockClient *http.Client
+	stockHost   string // host of cfg.StockAPI, to route requests to stockClient
+	cache       cache.Cache
 	// flight collapses concurrent cache misses for the same key into one upstream request.
 	flight singleflight.Group
 }
@@ -145,14 +148,44 @@ func NewPriceService(cfg *config.PriceAPIConfig, c cache.Cache) port.PriceServic
 		TLSHandshakeTimeout: 10 * time.Second,
 	}
 
-	return &PriceService{
-		cfg: cfg,
-		httpClient: &http.Client{
-			Timeout:   15 * time.Second,
-			Transport: transport,
-		},
-		cache: c,
+	httpClient := &http.Client{Timeout: 15 * time.Second, Transport: transport}
+	stockClient := httpClient
+	if cfg.StockProxy != "" {
+		if proxyURL, err := url.Parse(cfg.StockProxy); err == nil {
+			stockTransport := transport.Clone()
+			stockTransport.Proxy = http.ProxyURL(proxyURL)
+			stockClient = &http.Client{Timeout: 15 * time.Second, Transport: stockTransport}
+		}
 	}
+	var stockHost string
+	if u, err := url.Parse(cfg.StockAPI); err == nil {
+		stockHost = u.Host
+	}
+
+	return &PriceService{
+		cfg:         cfg,
+		httpClient:  httpClient,
+		stockClient: stockClient,
+		stockHost:   stockHost,
+		cache:       c,
+	}
+}
+
+// yahooUserAgent is a full browser User-Agent; Yahoo rejects some short or non-browser ones.
+const yahooUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+
+// newYahooRequest builds a GET to cfg.StockAPI+path with the headers Yahoo (or the relay) expects.
+func (s *PriceService) newYahooRequest(ctx context.Context, path string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", s.cfg.StockAPI+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", yahooUserAgent)
+	if s.cfg.StockToken != "" {
+		req.Header.Set("X-Relay-Token", s.cfg.StockToken)
+	}
+	return req, nil
 }
 
 func (s *PriceService) GetPrice(ctx context.Context, assetType string, symbol string) (*port.PriceData, error) {
@@ -416,7 +449,11 @@ func (s *PriceService) doWithRetry(req *http.Request) ([]byte, int, error) {
 
 // do sends req and returns the body, status and the wait the server asks for in Retry-After.
 func (s *PriceService) do(req *http.Request) ([]byte, int, time.Duration, error) {
-	resp, err := s.httpClient.Do(req)
+	client := s.httpClient
+	if s.stockHost != "" && req.URL.Host == s.stockHost {
+		client = s.stockClient
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -459,13 +496,10 @@ func (s *PriceService) fetchYahooChart(ctx context.Context, symbol, query string
 		}
 	}
 	for i, yahooSymbol := range candidates {
-		url := fmt.Sprintf("%s/v8/finance/chart/%s?%s", s.cfg.StockAPI, yahooSymbol, query)
-		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		req, err := s.newYahooRequest(ctx, fmt.Sprintf("/v8/finance/chart/%s?%s", yahooSymbol, query))
 		if err != nil {
-			return nil, yahooSymbol, fmt.Errorf("create request: %w", err)
+			return nil, yahooSymbol, err
 		}
-		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", "Mozilla/5.0")
 
 		body, status, err := s.doWithRetry(req)
 		if err != nil {
@@ -670,14 +704,10 @@ func (s *PriceService) getExchangeRate(ctx context.Context, fromCurrency, toCurr
 
 func (s *PriceService) yahooExchangeRate(ctx context.Context, fromCurrency, toCurrency string) (float64, error) {
 	fxSymbol := fmt.Sprintf("%s%s=X", fromCurrency, toCurrency)
-	url := fmt.Sprintf("%s/v8/finance/chart/%s?interval=1d&range=1d", s.cfg.StockAPI, fxSymbol)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := s.newYahooRequest(ctx, fmt.Sprintf("/v8/finance/chart/%s?interval=1d&range=1d", fxSymbol))
 	if err != nil {
-		return 0, fmt.Errorf("create request: %w", err)
+		return 0, err
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0")
 
 	body, status, err := s.doWithRetry(req)
 	if err != nil {
@@ -1165,14 +1195,10 @@ func (s *PriceService) searchYahoo(ctx context.Context, query string) ([]port.Sy
 		return cached, nil
 	}
 
-	searchURL := fmt.Sprintf("%s/v1/finance/search?q=%s&quotesCount=20&newsCount=0&listsCount=0",
-		s.cfg.StockAPI, url.QueryEscape(query))
-	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
+	req, err := s.newYahooRequest(ctx, "/v1/finance/search?q="+url.QueryEscape(query)+"&quotesCount=20&newsCount=0&listsCount=0")
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, err
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0")
 
 	body, status, err := s.doWithRetry(req)
 	if err != nil {

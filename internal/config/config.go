@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -45,8 +46,9 @@ type SecurityConfig struct {
 	CORSAllowedOrigins string // comma-separated, e.g. "https://app.example.com,https://admin.example.com"
 }
 
-// Base URLs of the external price providers. They are fixed in code, not read from env;
-// PriceAPIConfig keeps them as fields only so tests can point the service at a fake server.
+// Base URLs of the external price providers. CoinGecko and the FX API are fixed in code; the
+// Yahoo base URL defaults to YahooAPI but can be overridden with STOCK_API_URL (e.g. a relay, since
+// Yahoo answers 429 to many datacenter IPs). Tests point the fields at a fake server.
 const (
 	CoinGeckoAPI = "https://api.coingecko.com/api/v3"
 	YahooAPI     = "https://query1.finance.yahoo.com"
@@ -56,7 +58,9 @@ const (
 type PriceAPIConfig struct {
 	CryptoAPI    string // CoinGecko base URL, e.g. https://api.coingecko.com/api/v3
 	CryptoAPIKey string // optional CoinGecko Demo (or Pro) API key
-	StockAPI     string
+	StockAPI     string // Yahoo Finance base URL, or a relay that forwards paths to it (STOCK_API_URL)
+	StockProxy   string // optional proxy for Yahoo requests only: http://, https:// or socks5:// URL
+	StockToken   string // optional value sent as X-Relay-Token on Yahoo requests (to guard a relay)
 	FXAPI        string // fallback exchange-rate API (open.er-api.com format)
 	CacheTTL     int    // in seconds
 }
@@ -125,7 +129,9 @@ func Load() (*Config, error) {
 		PriceAPI: PriceAPIConfig{
 			CryptoAPI:    CoinGeckoAPI,
 			CryptoAPIKey: getEnv("CRYPTO_PRICE_API_KEY", ""), // optional; raises the CoinGecko rate limit
-			StockAPI:     YahooAPI,
+			StockAPI:     strings.TrimRight(getEnv("STOCK_API_URL", YahooAPI), "/"),
+			StockProxy:   getEnv("STOCK_API_PROXY", ""),
+			StockToken:   getEnv("STOCK_API_RELAY_TOKEN", ""),
 			FXAPI:        ExchangeAPI,
 			CacheTTL:     cacheTTL,
 		},
@@ -158,6 +164,17 @@ func (c *Config) Validate() error {
 	if c.Jwt.Secret != "" && c.Jwt.Secret == c.Jwt.RefreshSecret {
 		// With one key, a refresh token would also pass as an access token.
 		errs = append(errs, errors.New("JWT_SECRET and JWT_REFRESH_SECRET must be different"))
+	}
+	if a := c.PriceAPI.StockAPI; a != "" {
+		if u, err := url.Parse(a); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			errs = append(errs, errors.New("STOCK_API_URL must be an http(s) URL"))
+		}
+	}
+	if p := c.PriceAPI.StockProxy; p != "" {
+		u, err := url.Parse(p)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "socks5") {
+			errs = append(errs, errors.New("STOCK_API_PROXY must be an http://, https:// or socks5:// URL"))
+		}
 	}
 	if c.App.Env == "production" {
 		if c.Jwt.Secret != "" && len(c.Jwt.Secret) < minSecretLen {

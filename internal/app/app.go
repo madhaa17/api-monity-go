@@ -85,7 +85,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 	router := routes.New(authMiddleware, handlers)
 	mux := router.Setup()
 
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
@@ -111,11 +111,12 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 	})
 
 	rateLimit := middleware.NewRateLimitMiddleware(&cfg.RateLimit)
+	var routed http.Handler = jsonNotFound(mux)
 	chain := middleware.Gzip(
 		middleware.RequestLogger(
 			middleware.CORS(cfg.Security.CORSAllowedOrigins)(
 				middleware.SecurityHeaders(
-					middleware.BodyLimit(middleware.MaxBodyBytes)(rateLimit.Handler(mux)),
+					middleware.BodyLimit(middleware.MaxBodyBytes)(rateLimit.Handler(routed)),
 				),
 			),
 		),

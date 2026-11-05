@@ -13,6 +13,7 @@ import (
 	"monity/internal/database"
 	"monity/internal/pkg/cache"
 	"monity/internal/pkg/logger"
+	"monity/internal/pkg/response"
 )
 
 func main() {
@@ -25,9 +26,11 @@ func main() {
 	}
 
 	_ = logger.New(cfg.App.Env)
+	// In production, error responses carry only the handler's message, never raw error text.
+	response.SetExposeErrorDetails(cfg.App.Env != "production")
 
-	if cfg.Database.User == "" || cfg.Database.Name == "" {
-		slog.Error("DATABASE_USER and DATABASE_NAME must be set (e.g. in .env)")
+	if err := cfg.Validate(); err != nil {
+		slog.Error("invalid configuration (set these in .env or the deployment environment)", "error", err)
 		os.Exit(1)
 	}
 

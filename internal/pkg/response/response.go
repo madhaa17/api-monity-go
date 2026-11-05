@@ -13,12 +13,24 @@ type Wrapper struct {
 	Errors  interface{} `json:"errors,omitempty"`
 }
 
+// exposeErrorDetails controls whether raw error strings (usually err.Error(), which can name the
+// database, driver, Go types or upstream APIs) are sent to clients. Turned off in production by
+// SetExposeErrorDetails; the details are still written to the server log.
+var exposeErrorDetails = true
+
+// SetExposeErrorDetails sets whether raw error strings are included in error responses.
+func SetExposeErrorDetails(expose bool) { exposeErrorDetails = expose }
+
 // normalizeErrors ensures errors is always an object for FE. String -> {"message": s}; nil -> {}.
+// Structured errors (e.g. field maps) are always kept; raw strings only when details are exposed.
 func normalizeErrors(errors interface{}) interface{} {
 	if errors == nil {
 		return map[string]interface{}{}
 	}
 	if s, ok := errors.(string); ok {
+		if !exposeErrorDetails {
+			return map[string]interface{}{}
+		}
 		return map[string]interface{}{"message": s}
 	}
 	return errors
@@ -66,6 +78,9 @@ func ErrorWithLog(w http.ResponseWriter, r *http.Request, status int, message st
 		}
 		slog.Error("handler_error", attrs...)
 	} else if status >= 400 {
+		if errors != nil {
+			attrs = append(attrs, "error", errors)
+		}
 		slog.Debug("client_error", attrs...)
 	}
 }

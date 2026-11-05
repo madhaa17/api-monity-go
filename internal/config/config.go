@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"net/url"
 	"strconv"
 )
@@ -42,6 +44,14 @@ type RateLimitConfig struct {
 type SecurityConfig struct {
 	CORSAllowedOrigins string // comma-separated, e.g. "https://app.example.com,https://admin.example.com"
 }
+
+// Base URLs of the external price providers. They are fixed in code, not read from env;
+// PriceAPIConfig keeps them as fields only so tests can point the service at a fake server.
+const (
+	CoinGeckoAPI = "https://api.coingecko.com/api/v3"
+	YahooAPI     = "https://query1.finance.yahoo.com"
+	ExchangeAPI  = "https://open.er-api.com/v6" // fallback FX rates when Yahoo FX is unavailable
+)
 
 type PriceAPIConfig struct {
 	CryptoAPI    string // CoinGecko base URL, e.g. https://api.coingecko.com/api/v3
@@ -107,16 +117,16 @@ func Load() (*Config, error) {
 			DB:       redisDB,
 		},
 		Jwt: JwtConfig{
-			Secret:            getEnv("JWT_SECRET", "secret"),
+			Secret:            getEnv("JWT_SECRET", ""), // required, no fallback: see Validate
 			ExpirationTime:    getEnv("JWT_EXPIRATION_TIME", "1h"),
-			RefreshSecret:     getEnv("JWT_REFRESH_SECRET", "refresh_secret"),
+			RefreshSecret:     getEnv("JWT_REFRESH_SECRET", ""),              // required, no fallback: see Validate
 			RefreshExpiration: getEnv("JWT_REFRESH_EXPIRATION_TIME", "168h"), // 7d default
 		},
 		PriceAPI: PriceAPIConfig{
-			CryptoAPI:    getEnv("CRYPTO_PRICE_API", "https://api.coingecko.com/api/v3"),
-			CryptoAPIKey: getEnv("CRYPTO_PRICE_API_KEY", ""),
-			StockAPI:     getEnv("STOCK_PRICE_API", "https://query1.finance.yahoo.com"),
-			FXAPI:        getEnv("FX_PRICE_API", "https://open.er-api.com/v6"),
+			CryptoAPI:    CoinGeckoAPI,
+			CryptoAPIKey: getEnv("CRYPTO_PRICE_API_KEY", ""), // optional; raises the CoinGecko rate limit
+			StockAPI:     YahooAPI,
+			FXAPI:        ExchangeAPI,
 			CacheTTL:     cacheTTL,
 		},
 		RateLimit: RateLimitConfig{
@@ -127,6 +137,37 @@ func Load() (*Config, error) {
 			CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "*"),
 		},
 	}, nil
+}
+
+// minSecretLen is the shortest JWT secret accepted in production (32 bytes = 256 bits for HS256).
+const minSecretLen = 32
+
+// Validate reports every required setting that is missing or unsafe, so the server refuses to
+// start instead of running with a guessable JWT secret.
+func (c *Config) Validate() error {
+	var errs []error
+	if c.Database.User == "" || c.Database.Name == "" {
+		errs = append(errs, errors.New("DATABASE_USER and DATABASE_NAME must be set"))
+	}
+	if c.Jwt.Secret == "" {
+		errs = append(errs, errors.New("JWT_SECRET must be set"))
+	}
+	if c.Jwt.RefreshSecret == "" {
+		errs = append(errs, errors.New("JWT_REFRESH_SECRET must be set"))
+	}
+	if c.Jwt.Secret != "" && c.Jwt.Secret == c.Jwt.RefreshSecret {
+		// With one key, a refresh token would also pass as an access token.
+		errs = append(errs, errors.New("JWT_SECRET and JWT_REFRESH_SECRET must be different"))
+	}
+	if c.App.Env == "production" {
+		if c.Jwt.Secret != "" && len(c.Jwt.Secret) < minSecretLen {
+			errs = append(errs, fmt.Errorf("JWT_SECRET must be at least %d characters in production", minSecretLen))
+		}
+		if c.Jwt.RefreshSecret != "" && len(c.Jwt.RefreshSecret) < minSecretLen {
+			errs = append(errs, fmt.Errorf("JWT_REFRESH_SECRET must be at least %d characters in production", minSecretLen))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // DSN builds a postgres:// URL. User and password are URL-escaped so special

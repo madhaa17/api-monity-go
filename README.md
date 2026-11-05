@@ -43,7 +43,7 @@ backend/
 
    ```bash
    cp .env.example .env
-   # Edit .env: DATABASE_*, JWT_SECRET (crypto/stock prices use CoinGecko & Yahoo Finance, no API key needed)
+   # Edit .env: DATABASE_*, JWT_SECRET, JWT_REFRESH_SECRET (required; crypto/stock prices need no API key)
    ```
 
 3. **Database**
@@ -182,8 +182,8 @@ Example: `GET /api/v1/portfolio?currency=USD`.
 |------------------------|--------------------------------|
 | `APP_PORT`             | Server port (default 8080)     |
 | `DATABASE_HOST`, `*`   | PostgreSQL connection         |
-| `JWT_SECRET`           | Secret for signing JWT        |
-| `STOCK_PRICE_API`      | Yahoo Finance base URL (optional override; default in .env.example) |
+| `JWT_SECRET`, `JWT_REFRESH_SECRET` | **Required**, no defaults. Must differ; ≥ 32 chars when `APP_ENV=production` (`openssl rand -hex 32`). The server refuses to start otherwise. |
+| `CRYPTO_PRICE_API_KEY` | Optional CoinGecko key (higher rate limit) |
 | `RATE_LIMIT_TTL`       | Rate limit window (seconds)   |
 | `RATE_LIMIT_LIMIT`     | Max requests per window per IP |
 | `CORS_ALLOWED_ORIGINS` | `*` or comma-separated origins |
@@ -191,7 +191,7 @@ Example: `GET /api/v1/portfolio?currency=USD`.
 | `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB` | Redis connection |
 | `REDIS_TTL_PRICE`      | Price cache TTL in seconds    |
 
-**Prices:** Crypto prices use **CoinGecko** (free, no API key). Stock prices use **Yahoo Finance** (free, no API key; IDX symbols get `.JK` suffix). See `.env.example` for `STOCK_PRICE_API` if you need to override the Yahoo base URL.
+**Prices:** Crypto prices use **CoinGecko** (free, no API key). Stock prices use **Yahoo Finance** (free, no API key; IDX symbols get `.JK` suffix). The provider base URLs (CoinGecko, Yahoo Finance, open.er-api.com for fallback FX) are constants in `internal/config/config.go`, not env variables.
 
 If `REDIS_HOST` is set, the app uses Redis for caching crypto/stock prices and FX rates, improving performance and sharing cache across instances. Otherwise, an in-memory cache is used (single instance only).
 

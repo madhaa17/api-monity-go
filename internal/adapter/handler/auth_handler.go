@@ -40,7 +40,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err.Error() == "email already registered" {
 			slog.Warn("register_failed", "email", req.Email, "reason", err.Error())
-			response.ErrorWithLog(w, r, http.StatusConflict, "registration failed", err.Error())
+			response.ErrorWithLog(w, r, http.StatusConflict, "email already registered", nil)
 			return
 		}
 		if err.Error() == "invalid email format" || strings.HasPrefix(err.Error(), "password ") || strings.HasPrefix(err.Error(), "name must be") || strings.HasPrefix(err.Error(), "email must be") {

@@ -634,7 +634,7 @@ func (s *PriceService) fetchStockPrice(ctx context.Context, symbol string, curre
 // Exchange rate — Yahoo Finance (e.g. USDIDR=X), falling back to open.er-api.com
 // ---------------------------------------------------------------------------
 
-const defaultFXAPI = "https://open.er-api.com/v6"
+const defaultFXAPI = config.ExchangeAPI
 
 // getExchangeRate returns how many toCurrency one fromCurrency buys, from the cache, Yahoo
 // (intraday) or, when Yahoo fails, the daily rates of the FX API.

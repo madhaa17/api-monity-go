@@ -37,3 +37,6 @@ Thumbs.db
 knowledge/
 .knowledge/*
 .agents/
+
+# Wrangler (Cloudflare) local cache: holds the account id/name
+.wrangler/

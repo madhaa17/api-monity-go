@@ -25,6 +25,7 @@ backend/
 │   ├── models/          # Domain entities
 │   └── pkg/response/    # JSON response helpers
 ├── migrations/          # SQL migrations (001–009), applied in order
+├── relay/               # Cloudflare Worker relaying Yahoo Finance (for blocked server IPs)
 ├── Dockerfile
 ├── docker-compose.yml   # Dokploy / Docker Compose
 └── .env.example
@@ -194,8 +195,51 @@ Example: `GET /api/v1/portfolio?currency=USD`.
 | `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB` | Redis connection |
 | `REDIS_TTL_PRICE`      | Price cache TTL in seconds    |
 
-**Prices:** Crypto prices use **CoinGecko** (free, no API key). Stock prices use **Yahoo Finance** (free, no API key; IDX symbols get `.JK` suffix). The provider base URLs (CoinGecko, Yahoo Finance, open.er-api.com for fallback FX) are constants in `internal/config/config.go`, not env variables.
+**Prices:** Crypto prices use **CoinGecko** (free, no API key). Stock prices and FX use **Yahoo Finance** (free, no API key; IDX symbols get `.JK` suffix), with open.er-api.com as fallback FX. The CoinGecko and open.er-api.com base URLs are constants in `internal/config/config.go`; the Yahoo base URL defaults to `https://query1.finance.yahoo.com` and can be overridden with `STOCK_API_URL` (see [Deployment](#deployment-dokploy)).
 
 If `REDIS_HOST` is set, the app uses Redis for caching crypto/stock prices and FX rates, improving performance and sharing cache across instances. Otherwise, an in-memory cache is used (single instance only).
 
 See `.env.example` for the full list.
+
+## Deployment (Dokploy)
+
+The API runs on Dokploy from this repo's `Dockerfile` (`docker-compose.yml` is provided for a Compose-type deploy). Set the env variables in the Dokploy UI, then press **Deploy**: saving env alone does not restart the container.
+
+- Write env values **without quotes** (`KEY=value`, not `KEY="value"`); some Dokploy setups keep the quotes as part of the value.
+- The image is Alpine with no `curl`; use `wget -qO- <url>` from the Dokploy container terminal.
+
+### Yahoo Finance relay
+
+Yahoo answers **429** to many datacenter IPs, including the current production VPS (Tencent Cloud). Locally it works; in production stock search/price/chart and Yahoo FX then fail with 502 while crypto (CoinGecko) still works. Production therefore routes Yahoo requests through the Cloudflare Worker in `relay/yahoo-worker.js`. It forwards only `/v8/finance/chart/{symbol}` and `/v1/finance/search`, and only when the request carries the right `X-Relay-Token`, so it is not an open proxy.
+
+Setup (already done for production; repeat to rotate the token or move accounts):
+
+```bash
+cd relay
+npx wrangler deploy yahoo-worker.js --name moneytor-yahoo-relay --compatibility-date 2026-10-01
+TOKEN=$(openssl rand -hex 32); echo "$TOKEN"
+echo -n "$TOKEN" | npx wrangler secret put RELAY_TOKEN --name moneytor-yahoo-relay
+```
+
+Then in Dokploy set, and redeploy:
+
+```env
+STOCK_API_URL=https://moneytor-yahoo-relay.<account>.workers.dev
+STOCK_API_RELAY_TOKEN=<same token, no quotes>
+```
+
+Instead of the relay you can set `STOCK_API_PROXY` (`http://` or `socks5://`) to a proxy whose IP Yahoo does not block; it applies to Yahoo requests only.
+
+**Troubleshooting** — the backend logs `price_api_error ... source=yahoo status=<n>`:
+
+| Status | Meaning | Fix |
+|--------|---------|-----|
+| 401 | Relay rejected the token | `STOCK_API_RELAY_TOKEN` ≠ worker `RELAY_TOKEN` (check quotes/newline); reset both as above |
+| 429 | Yahoo is blocking the caller's IP | `STOCK_API_URL` not set or container not redeployed; check `env \| grep STOCK` in the container |
+| 404 | Path not allowed by the relay | Backend calls a Yahoo endpoint missing from `ALLOWED` in `relay/yahoo-worker.js` |
+
+Test the relay directly:
+
+```bash
+curl -H "X-Relay-Token: $TOKEN" "https://moneytor-yahoo-relay.<account>.workers.dev/v1/finance/search?q=BUMI"
+```

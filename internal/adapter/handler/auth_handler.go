@@ -9,15 +9,30 @@ import (
 
 	"monity/internal/adapter/middleware"
 	"monity/internal/core/port"
+	"monity/internal/models"
+	"monity/internal/pkg/authcookie"
 	"monity/internal/pkg/response"
 )
 
 type AuthHandler struct {
-	svc port.AuthService
+	svc     port.AuthService
+	cookies *authcookie.Manager
 }
 
-func NewAuthHandler(svc port.AuthService) *AuthHandler {
-	return &AuthHandler{svc: svc}
+func NewAuthHandler(svc port.AuthService, cookies *authcookie.Manager) *AuthHandler {
+	return &AuthHandler{svc: svc, cookies: cookies}
+}
+
+// authUserResponse is the body of a successful login, register, refresh or password change. The
+// tokens themselves only travel in HttpOnly cookies.
+type authUserResponse struct {
+	User *models.User `json:"user"`
+}
+
+// startSession stores the token pair in cookies and answers with the user.
+func (h *AuthHandler) startSession(w http.ResponseWriter, status int, message string, resp *port.AuthResponse) {
+	h.cookies.Set(w, resp.Token, resp.RefreshToken)
+	response.Success(w, status, message, authUserResponse{User: resp.User})
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +67,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("register_success", "email", req.Email, "user_id", resp.User.ID)
-	response.Success(w, http.StatusCreated, "registration successful", resp)
+	h.startSession(w, http.StatusCreated, "registration successful", resp)
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -86,26 +101,32 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("login_success", "email", req.Email, "user_id", resp.User.ID)
-	response.Success(w, http.StatusOK, "login successful", resp)
+	h.startSession(w, http.StatusOK, "login successful", resp)
 }
 
+// Refresh rotates the token pair. The refresh token comes from its cookie, or from a
+// {"refresh_token": "..."} body for clients without cookies.
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		RefreshToken string `json:"refresh_token"`
+	refreshToken := authcookie.RefreshToken(r)
+	if refreshToken == "" {
+		var req struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		refreshToken = req.RefreshToken
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.ErrorWithLog(w, r, http.StatusBadRequest, "invalid request body", err.Error())
-		return
-	}
-	if req.RefreshToken == "" {
-		response.ErrorWithLog(w, r, http.StatusBadRequest, "refresh_token required", nil)
+	if refreshToken == "" {
+		h.cookies.Clear(w)
+		response.ErrorWithLog(w, r, http.StatusUnauthorized, "refresh token required", nil)
 		return
 	}
 
-	resp, err := h.svc.Refresh(r.Context(), req.RefreshToken)
+	resp, err := h.svc.Refresh(r.Context(), refreshToken)
 	if err != nil {
 		switch err.Error() {
 		case "refresh token required", "invalid or expired refresh token", "invalid refresh token claims", "invalid refresh token payload", "user not found":
+			// The session cannot be renewed: drop the cookies so the frontend sends the user to login.
+			h.cookies.Clear(w)
 			response.ErrorWithLog(w, r, http.StatusUnauthorized, "refresh failed", err.Error())
 			return
 		}
@@ -113,7 +134,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Success(w, http.StatusOK, "token refreshed", resp)
+	h.startSession(w, http.StatusOK, "token refreshed", resp)
 }
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
@@ -134,26 +155,32 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, http.StatusOK, "ok", user)
 }
 
-// Logout revokes the access token from the Authorization header and the refresh token from the
-// body. It needs no valid session, so a client whose access token has expired can still revoke its
-// refresh token; at least one of the two must be sent.
+// Logout revokes the access token (Authorization header or cookie) and the refresh token (cookie
+// or body), then clears the auth cookies. It needs no valid session, so a client whose access token
+// has expired can still revoke its refresh token. The cookies are cleared even when nothing could be
+// revoked, so the browser always ends up signed out.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	var accessToken string
+	accessToken := authcookie.AccessToken(r)
 	if parts := strings.SplitN(r.Header.Get("Authorization"), " ", 2); len(parts) == 2 && parts[0] == "Bearer" {
 		accessToken = parts[1]
 	}
 
-	var body struct {
-		RefreshToken string `json:"refresh_token"`
+	refreshToken := authcookie.RefreshToken(r)
+	if refreshToken == "" {
+		var body struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		refreshToken = body.RefreshToken
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
 
-	if accessToken == "" && body.RefreshToken == "" {
-		response.ErrorWithLog(w, r, http.StatusBadRequest, "access token or refresh_token required", nil)
+	h.cookies.Clear(w)
+	if accessToken == "" && refreshToken == "" {
+		response.Success(w, http.StatusOK, "logged out", nil)
 		return
 	}
 
-	if err := h.svc.Logout(r.Context(), accessToken, body.RefreshToken); err != nil {
+	if err := h.svc.Logout(r.Context(), accessToken, refreshToken); err != nil {
 		response.ErrorWithLog(w, r, http.StatusInternalServerError, "logout failed", err.Error())
 		return
 	}
@@ -190,5 +217,5 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("password_changed", "user_id", userID)
-	response.Success(w, http.StatusOK, "password changed", resp)
+	h.startSession(w, http.StatusOK, "password changed", resp)
 }

@@ -12,6 +12,7 @@ import (
 	"monity/internal/config"
 	"monity/internal/core/port"
 	"monity/internal/core/service"
+	"monity/internal/pkg/authcookie"
 	"monity/internal/pkg/cache"
 
 	"gorm.io/gorm"
@@ -66,7 +67,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 	authMiddleware := middleware.NewAuthMiddleware(cfg, c)
 
 	handlers := &routes.Handlers{
-		Auth:              handler.NewAuthHandler(authSvc),
+		Auth:              handler.NewAuthHandler(authSvc, authcookie.NewManager(cfg)),
 		Asset:             handler.NewAssetHandler(assetSvc),
 		Activity:          handler.NewActivityHandler(activitySvc),
 		Expense:           handler.NewExpenseHandler(expenseSvc),
@@ -116,7 +117,11 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, c cache.Cache) *A
 		middleware.RequestLogger(
 			middleware.CORS(cfg.Security.CORSAllowedOrigins)(
 				middleware.SecurityHeaders(
-					middleware.BodyLimit(middleware.MaxBodyBytes)(rateLimit.Handler(routed)),
+					middleware.RequireInternalToken(cfg.Security.InternalAPIToken)(
+						middleware.CSRF(cfg.Security.CORSAllowedOrigins)(
+							middleware.BodyLimit(middleware.MaxBodyBytes)(rateLimit.Handler(routed)),
+						),
+					),
 				),
 			),
 		),

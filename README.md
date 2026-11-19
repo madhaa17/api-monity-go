@@ -174,7 +174,7 @@ Example: `GET /api/v1/portfolio?currency=USD`.
 
 - **Rate limit** — in-memory per IP (`RATE_LIMIT_TTL`, `RATE_LIMIT_LIMIT`); returns 429 when exceeded.
 - **Security headers** — `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `Referrer-Policy`.
-- **CORS** — controlled via `CORS_ALLOWED_ORIGINS` (`*` or comma-separated list of origins).
+- **CORS** — controlled via `CORS_ALLOWED_ORIGINS` (comma-separated origins; empty = no cross-origin browser access, the default; `*` is refused in production).
 - **Auth** — JWT middleware for protected routes.
 
 ## Important env variables
@@ -190,7 +190,8 @@ Example: `GET /api/v1/portfolio?currency=USD`.
 | `STOCK_API_RELAY_TOKEN` | Sent as `X-Relay-Token`; must match the relay's `RELAY_TOKEN` |
 | `RATE_LIMIT_TTL`       | Rate limit window (seconds)   |
 | `RATE_LIMIT_LIMIT`     | Max requests per window per IP |
-| `CORS_ALLOWED_ORIGINS` | `*` or comma-separated origins |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated origins; empty (default) = none; `*` refused in production |
+| `INTERNAL_API_TOKEN`   | Shared secret the frontend server sends as `X-Internal-Token`; other requests get 403 (except `GET /health`, `GET /`). Required in production |
 | `REDIS_HOST`           | Redis host for cache (empty = in-memory cache) |
 | `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB` | Redis connection |
 | `REDIS_TTL_PRICE`      | Price cache TTL in seconds    |
@@ -199,7 +200,7 @@ Example: `GET /api/v1/portfolio?currency=USD`.
 
 If `REDIS_HOST` is set, the app uses Redis for caching crypto/stock prices and FX rates, improving performance and sharing cache across instances. Otherwise, an in-memory cache is used (single instance only).
 
-See `.env.example` for the full list.
+See `.env.example` for the full list, and [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) for local vs production setup of backend + web (incl. `INTERNAL_API_TOKEN` and deploy order).
 
 ## Deployment (Dokploy)
 

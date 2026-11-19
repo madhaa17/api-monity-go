@@ -16,6 +16,7 @@ type Config struct {
 	PriceAPI  PriceAPIConfig
 	RateLimit RateLimitConfig
 	Security  SecurityConfig
+	Cookie    CookieConfig
 }
 
 type RedisConfig struct {
@@ -42,8 +43,20 @@ type RateLimitConfig struct {
 	Limit      int // max requests per window per client
 }
 
+// CookieConfig controls the auth cookies the backend sets on login, register, refresh and password
+// change. The browser reaches the backend through the frontend's /api/v1 rewrite, so by default the
+// cookies are host-only on the frontend's domain.
+type CookieConfig struct {
+	Secure bool   // COOKIE_SECURE; defaults to true when APP_ENV=production
+	Domain string // COOKIE_DOMAIN; optional, leave empty for host-only cookies
+}
+
 type SecurityConfig struct {
 	CORSAllowedOrigins string // comma-separated, e.g. "https://app.example.com,https://admin.example.com"
+	// InternalAPIToken is the shared secret the frontend server sends as X-Internal-Token. When set,
+	// every request without it is refused, so the API is only reachable through the frontend.
+	// Required in production; empty in development disables the check.
+	InternalAPIToken string
 }
 
 // Base URLs of the external price providers. CoinGecko and the FX API are fixed in code; the
@@ -97,10 +110,15 @@ func Load() (*Config, error) {
 	rateLimitTTL, _ := strconv.Atoi(getEnv("RATE_LIMIT_TTL", "60"))
 	rateLimitLimit, _ := strconv.Atoi(getEnv("RATE_LIMIT_LIMIT", "100"))
 	redisDB, _ := strconv.Atoi(getEnv("REDIS_DB", "0"))
+	appEnv := getEnv("APP_ENV", "development")
+	cookieSecure, err := strconv.ParseBool(getEnv("COOKIE_SECURE", strconv.FormatBool(appEnv == "production")))
+	if err != nil {
+		cookieSecure = appEnv == "production"
+	}
 
 	return &Config{
 		App: AppConfig{
-			Env:  getEnv("APP_ENV", "development"),
+			Env:  appEnv,
 			Port: getEnv("APP_PORT", "8080"),
 		},
 		Database: DatabaseConfig{
@@ -140,7 +158,12 @@ func Load() (*Config, error) {
 			Limit:      rateLimitLimit,
 		},
 		Security: SecurityConfig{
-			CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "*"),
+			CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", ""), // empty: no cross-origin browser access
+			InternalAPIToken:   getEnv("INTERNAL_API_TOKEN", ""),
+		},
+		Cookie: CookieConfig{
+			Secure: cookieSecure,
+			Domain: getEnv("COOKIE_DOMAIN", ""),
 		},
 	}, nil
 }
@@ -177,6 +200,12 @@ func (c *Config) Validate() error {
 		}
 	}
 	if c.App.Env == "production" {
+		if len(c.Security.InternalAPIToken) < minSecretLen {
+			errs = append(errs, fmt.Errorf("INTERNAL_API_TOKEN must be set to at least %d characters in production", minSecretLen))
+		}
+		if strings.TrimSpace(c.Security.CORSAllowedOrigins) == "*" {
+			errs = append(errs, errors.New("CORS_ALLOWED_ORIGINS must not be * in production; list the origins or leave it empty"))
+		}
 		if c.Jwt.Secret != "" && len(c.Jwt.Secret) < minSecretLen {
 			errs = append(errs, fmt.Errorf("JWT_SECRET must be at least %d characters in production", minSecretLen))
 		}

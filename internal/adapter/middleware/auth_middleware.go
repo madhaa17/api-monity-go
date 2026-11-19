@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"monity/internal/config"
+	"monity/internal/pkg/authcookie"
 	"monity/internal/pkg/cache"
 	"monity/internal/pkg/response"
 
@@ -43,21 +44,25 @@ func (m *AuthMiddleware) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 		ip := authClientIP(r)
 		path := r.URL.Path
 
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			slog.Warn("auth_failed", "reason", "authorization header required", "ip", ip, "path", path)
-			response.Error(w, http.StatusUnauthorized, "authorization header required", nil)
+		// Browsers send the HttpOnly cookie; the frontend server and other clients send a Bearer header.
+		var tokenString string
+		if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+			parts := strings.Split(authHeader, " ")
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				slog.Warn("auth_failed", "reason", "invalid authorization format", "ip", ip, "path", path)
+				response.Error(w, http.StatusUnauthorized, "invalid authorization format", nil)
+				return
+			}
+			tokenString = parts[1]
+		} else {
+			tokenString = authcookie.AccessToken(r)
+		}
+		if tokenString == "" {
+			slog.Warn("auth_failed", "reason", "missing token", "ip", ip, "path", path)
+			response.Error(w, http.StatusUnauthorized, "authentication required", nil)
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			slog.Warn("auth_failed", "reason", "invalid authorization format", "ip", ip, "path", path)
-			response.Error(w, http.StatusUnauthorized, "invalid authorization format", nil)
-			return
-		}
-
-		tokenString := parts[1]
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])

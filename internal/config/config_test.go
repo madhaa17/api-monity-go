@@ -13,6 +13,7 @@ func validConfig(env string) *Config {
 			Secret:        strings.Repeat("a", minSecretLen),
 			RefreshSecret: strings.Repeat("b", minSecretLen),
 		},
+		Security: SecurityConfig{InternalAPIToken: strings.Repeat("c", minSecretLen)},
 	}
 }
 
@@ -31,6 +32,11 @@ func TestValidate(t *testing.T) {
 		{name: "missing JWT_REFRESH_SECRET", env: "development", mutate: func(c *Config) { c.Jwt.RefreshSecret = "" }, wantErr: "JWT_REFRESH_SECRET must be set"},
 		{name: "same secrets", env: "development", mutate: func(c *Config) { c.Jwt.RefreshSecret = c.Jwt.Secret }, wantErr: "must be different"},
 		{name: "short secret in production", env: "production", mutate: func(c *Config) { c.Jwt.Secret = "short" }, wantErr: "at least 32 characters"},
+		{name: "wildcard CORS in production", env: "production", mutate: func(c *Config) { c.Security.CORSAllowedOrigins = " * " }, wantErr: "must not be *"},
+		{name: "wildcard CORS in development", env: "development", mutate: func(c *Config) { c.Security.CORSAllowedOrigins = "*" }},
+		{name: "missing internal token in production", env: "production", mutate: func(c *Config) { c.Security.InternalAPIToken = "" }, wantErr: "INTERNAL_API_TOKEN"},
+		{name: "short internal token in production", env: "production", mutate: func(c *Config) { c.Security.InternalAPIToken = "short" }, wantErr: "INTERNAL_API_TOKEN"},
+		{name: "internal token optional in development", env: "development", mutate: func(c *Config) { c.Security.InternalAPIToken = "" }},
 		{name: "missing database", env: "development", mutate: func(c *Config) { c.Database.Name = "" }, wantErr: "DATABASE_USER and DATABASE_NAME"},
 	}
 	for _, tt := range tests {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"monity/internal/config"
+	"monity/internal/pkg/authcookie"
 	"monity/internal/pkg/cache"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -50,6 +51,45 @@ func TestRequireAuthRejectsTokensIssuedBeforePasswordChange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 			req.Header.Set("Authorization", "Bearer "+sign(tt.claims))
+			rec := httptest.NewRecorder()
+			handler(rec, req)
+			if rec.Code != tt.want {
+				t.Fatalf("status %d, want %d", rec.Code, tt.want)
+			}
+		})
+	}
+}
+
+func TestRequireAuthAcceptsCookieOrBearer(t *testing.T) {
+	cfg := &config.Config{Jwt: config.JwtConfig{Secret: "access-secret"}}
+	m := NewAuthMiddleware(cfg, cache.NewMemoryCache())
+	handler := m.RequireAuth(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": 7, "uuid": "user-uuid", "iat": time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix(),
+	}).SignedString([]byte(cfg.Jwt.Secret))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name  string
+		setup func(r *http.Request)
+		want  int
+	}{
+		{"cookie", func(r *http.Request) { r.AddCookie(&http.Cookie{Name: authcookie.AccessName, Value: token}) }, http.StatusOK},
+		{"bearer", func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+token) }, http.StatusOK},
+		{"neither", func(r *http.Request) {}, http.StatusUnauthorized},
+		{"bad cookie", func(r *http.Request) { r.AddCookie(&http.Cookie{Name: authcookie.AccessName, Value: "garbage"}) }, http.StatusUnauthorized},
+		{"bad header wins over cookie", func(r *http.Request) {
+			r.Header.Set("Authorization", "Basic abc")
+			r.AddCookie(&http.Cookie{Name: authcookie.AccessName, Value: token})
+		}, http.StatusUnauthorized},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+			tt.setup(req)
 			rec := httptest.NewRecorder()
 			handler(rec, req)
 			if rec.Code != tt.want {
